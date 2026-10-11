@@ -8,3 +8,20 @@ body {
   @apply bg-neutral-50 text-neutral-900 antialiased dark:bg-neutral-950 dark:text-neutral-100;
   font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
 }
+
+/* Chart colors: categorical slots 1-2 (validated light and dark), recessive grid and ink. */
+:root {
+  --series-1: #2a78d6;
+  --series-2: #eb6834;
+  --chart-grid: #e5e5e5;
+  --chart-ink: #525252;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --series-1: #3987e5;
+    --series-2: #d95926;
+    --chart-grid: #2a2a2a;
+    --chart-ink: #a3a3a3;
+  }
+}

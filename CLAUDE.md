@@ -25,17 +25,18 @@ React 19 + TypeScript + Vite, React Router (data router in `src/main.tsx`), Tail
 ## Layout
 
 ```
-src/main.tsx              router and screen list
-src/components/           Layout (auth gate, bottom tab bar), SignIn, RestTimer, shared UI
-src/routes/Today.tsx      Today screen: today's session, one-tap set logging, finish
-src/routes/screens.tsx    other screens (placeholders until each phase builds them)
-src/lib/api.ts            Supabase queries the screens use (loadDay, insertSet, ...)
-src/lib/logging.ts        what a tap logs per measure, hit_target, set labels, rest after a set
-src/lib/auth.ts           useAuthSession
-src/lib/restTimer.ts      rest timer context (provider in components/RestTimer.tsx)
+src/main.tsx              router and screen list; registers public/sw.js (offline app shell) in production
+src/components/           Layout (auth gate, tab bar, sync banner), DayView (a day's sessions: logging, edits),
+                          SessionOptions, PrescriptionForm, MediaGallery, LineChart, RestTimer, SignIn
+src/routes/               one file per screen: Today, Day, Calendar, Feats, Progress, Media, Search, Review, Plan
 src/lib/supabase.ts       client; null until .env.local is filled in
 src/lib/types.ts          row types + the Prescription jsonb shape
+src/lib/api.ts            day loading/caching, set logging, one-off session edits (each writes a changes row)
+src/lib/offline.ts        queue for sets logged without signal; SyncBanner sends them when back online
+src/lib/plan.ts           template edits + regenerate_sessions, cycles, change log
+src/lib/feats.ts, media.ts, progress.ts, calendar.ts, search.ts, review.ts   data for those screens
 src/lib/prescription.ts   ladder loads from training max, set expansion, one-line summaries
+src/lib/logging.ts        what a tap logs per measure, hit_target, set labels, rest after a set
 src/lib/dates.ts          local-date helpers (sessions are keyed by local date)
 supabase/migrations/      schema; never edit an applied migration, add a new file
 supabase/seed.sql         generated; initial exercises, template and feats
@@ -54,7 +55,7 @@ Every table has `user_id` (defaults to `public.current_owner()`) and a row-level
 | cycles | A training cycle: `start_date`, `weeks` (12), `deload_weeks` ({6,12}), `status` |
 | template_slots | One weekday of the weekly plan (ISO weekday, 1 = Monday): name, `day_type`, mobility label |
 | template_items | One exercise in a template day: `position`, `block`, `prescription`, optional `min_week`/`max_week`/`week_parity` |
-| sessions | One dated day, generated from the template or added by hand (`slot_id` null). `status`, `is_deload`, `customized` |
+| sessions | One dated day, generated from the template or added by hand (`slot_id` null). `status`, `is_deload`, `customized`, `moved_from` (original date when moved; that date isn't regenerated) |
 | session_exercises | One exercise in a session, with its own copy of the prescription |
 | sets | One logged set: reps, `load_lb`, seconds, `distance_m`, contacts, optional rpe, `hit_target`, note |
 | feats | A feat: `stage` (now, next, background, achieved), target, unlock condition |
@@ -101,6 +102,7 @@ These apply to every Claude, whether in a coding session or in chat through the 
 
 ## Status
 
-- Done: schema, generator functions, seed data for the current program, app shell, tests. Phase 1 so far: email and password sign-in (no sign-ups), Today screen (ladder loads from the training max, one-tap set logging with edit/undo, skip, finish), rest timer.
-- Next (phase 1): create the Supabase project and connect it to claude.ai, run the migration and seed, record training maxes, start Cycle 1. Then the Calendar and Day detail, and offline queueing of sets. Deploy to Vercel.
+- Live: Supabase project `ucctcbocfoietldrrqea` (connected to claude.ai), deployed on Vercel. Cycle 1 started Mon 2026-10-12; sessions are generated through 2026-11-11.
+- Built: phase 1 (sign-in, Today with set logging and rest timer, Calendar, Day detail with one-off edits and moving, offline set queue and app shell), phase 2 (Feats with ladders and milestones, photo and video uploads, Progress charts with target lines, Media timeline and compare), phase 3 (Search, Plan editor with regeneration, change log, cycle controls, Week review with a summary for Claude).
+- The database is ahead of `data/program.json`: mobility blocks are now specific exercises, zone 2 is defined, lifting comes before running on Sat and Sun, bench training max is 215. Read the database, not the seed, for the current plan.
 - Open decisions are listed at the end of docs/app-plan.md.

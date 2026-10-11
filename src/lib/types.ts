@@ -99,6 +99,8 @@ export interface Session {
   started_at: string | null
   completed_at: string | null
   notes: string | null
+  /** Date a generated session was planned for before it was moved. */
+  moved_from: string | null
 }
 
 export interface SessionExercise {
@@ -198,4 +200,20 @@ export interface Change {
   reason: string | null
   affects_from: string | null
   details: Record<string, unknown>
+}
+
+/** Row of the feat_progress view: a feat with its current ladder step. */
+export interface FeatProgress {
+  id: string
+  slug: string
+  name: string
+  area: FeatArea
+  stage: FeatStage
+  target: string | null
+  achieved_on: string | null
+  position: number
+  steps_total: number
+  steps_done: number
+  current_step: number | null
+  current_step_description: string | null
 }
