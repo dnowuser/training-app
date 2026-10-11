@@ -79,7 +79,7 @@ Logged sets reference `session_exercises` with `on delete restrict`, so a sessio
 
 `prescription` is jsonb. Keys (all optional): `sets`, `sets_max`, `reps`, `reps_max`, `per_side`, `pct_tm` (percent of the exercise's training max), `load_lb`, `seconds`, `seconds_max`, `minutes`, `minutes_max`, `distance_m`, `target_seconds` (goal time per rep), `contacts`, `contacts_max`, `rest_s`, `intensity` (free text, e.g. "light"), `deload` (set by the generator).
 
-Heavy lifts use `{"scheme": "ladder", "warmups": [{"pct": 40, "reps": 5}, ...], "steps": [{"pct": 79, "reps": 5}, {"pct": 86, "reps": 3}, {"pct": 91, "reps": 1}, {"pct": 96, "reps": 1}], "rest_s": 180}`. Loads come from the latest `metrics` row with `kind = 'training_max'` for that exercise, rounded to 5 lb (`src/lib/prescription.ts`). Progression: +5 lb on the bench max and +10 lb on squat and deadlift each cycle while every top single moves well.
+Heavy lifts use `{"scheme": "ladder", "warmups": [{"pct": 40, "reps": 5}, ...], "steps": [{"pct": 79, "reps": 5}, {"pct": 86, "reps": 3}, {"pct": 91, "reps": 1}, {"pct": 96, "reps": 1}], "rest_s": 180}`. Loads come from the latest `metrics` row with `kind = 'training_max'` for that exercise, rounded to 5 lb (`src/lib/prescription.ts`). Progression: at the end of weeks 6 and 12, +5 lb on the bench max and +10 lb on squat and deadlift if every top single moved well (the rule is also in `cycles.notes`).
 
 ## Rules for changing the plan or the data
 
@@ -108,5 +108,5 @@ Wayson should never have to leave the Today screen to know what to do. Every exe
 
 - Live: Supabase project `ucctcbocfoietldrrqea` (connected to claude.ai), deployed on Vercel. Cycle 1 started Mon 2026-10-12; sessions are generated through 2026-11-11.
 - Built: phase 1 (sign-in, Today with set logging and rest timer, Calendar, Day detail with one-off edits and moving, offline set queue and app shell), phase 2 (Feats with ladders and milestones, photo and video uploads, Progress charts with target lines, Media timeline and compare), phase 3 (Search, Plan editor with regeneration, change log, cycle controls, Week review with a summary for Claude).
-- The database is ahead of `data/program.json`: mobility blocks are now specific exercises, zone 2 is defined, lifting comes before running on Sat and Sun, bench training max is 215. Read the database, not the seed, for the current plan.
+- The database is ahead of `data/program.json`: mobility blocks are now specific exercises, zone 2 has a 156 bpm cap (Wayson is 24, 5 ft 9, 160 lb), lifting comes before running on Sat and Sun, Tuesday has bench back-off sets, Thursday has an easy run, Sunday runs lengthen over the cycle, bench training max is 215, and feats carry ETAs in `rough_time`. Read the database, not the seed, for the current plan.
 - Open decisions are listed at the end of docs/app-plan.md.
