@@ -1,5 +1,5 @@
 import { NavLink, Outlet } from 'react-router'
-import { useAuthSession } from '../lib/auth'
+import { useAuthStatus } from '../lib/auth'
 import { supabase } from '../lib/supabase'
 import { RestTimerBar, RestTimerProvider } from './RestTimer'
 import { SignIn } from './SignIn'
@@ -14,10 +14,10 @@ const tabs = [
 ]
 
 export function Layout() {
-  const session = useAuthSession()
+  const status = useAuthStatus()
 
-  if (session === undefined) return null
-  if (supabase && !session) {
+  if (status === 'loading') return null
+  if (supabase && status === 'signed-out') {
     return (
       <main className="mx-auto max-w-lg px-4 pt-6">
         <SignIn />
