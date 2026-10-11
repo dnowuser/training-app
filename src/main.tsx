@@ -13,8 +13,8 @@ import {
   PlanScreen,
   ProgressScreen,
   SearchScreen,
-  TodayScreen,
 } from './routes/screens'
+import { TodayScreen } from './routes/Today'
 
 const router = createBrowserRouter([
   {

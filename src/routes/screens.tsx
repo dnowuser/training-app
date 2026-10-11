@@ -1,24 +1,7 @@
 import { Link, useParams } from 'react-router'
 import { Placeholder } from '../components/Placeholder'
 import { formatDay, localISODate } from '../lib/dates'
-
-export function TodayScreen() {
-  return (
-    <Placeholder
-      title="Today"
-      phase={1}
-      items={[
-        "Today's session, fully lined up: warm-up, each exercise with targets and rest",
-        'Ladder weights worked out from your training max, rounded to 5 lb',
-        'Start button that steps through exercises with a rest timer',
-        'One-tap set logging, or adjust reps, weight, seconds or distance',
-        'Record a feat with a photo or clip from any exercise',
-      ]}
-    >
-      <p className="mt-1 text-neutral-500">{formatDay(localISODate())}</p>
-    </Placeholder>
-  )
-}
+import { supabase } from '../lib/supabase'
 
 export function CalendarScreen() {
   return (
@@ -98,6 +81,15 @@ export function MoreScreen() {
           </li>
         ))}
       </ul>
+      {supabase && (
+        <button
+          type="button"
+          onClick={() => void supabase?.auth.signOut()}
+          className="mt-6 w-full rounded-xl border border-neutral-300 py-3 text-neutral-600 dark:border-neutral-700 dark:text-neutral-300"
+        >
+          Sign out
+        </button>
+      )}
     </section>
   )
 }
