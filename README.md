@@ -10,10 +10,7 @@ A personal training app: open it and today's workout is lined up, log what you h
 
 1. **Create a Supabase project** at [supabase.com](https://supabase.com).
 2. **Run the schema.** In the SQL editor, run each file in `supabase/migrations/` in order. (Or with the Supabase CLI: `supabase link` then `supabase db push`.)
-3. **Create your account and set up sign-in.** The app signs in by email and never creates accounts itself.
-   - Add yourself under Authentication → Users, then turn off new sign-ups so nobody else can create an account.
-   - Under Authentication → URL Configuration, set the Site URL to the deployed app (and add `http://localhost:5173` as a redirect URL for development).
-   - Under Authentication → Emails → Magic Link, add the code to the template, e.g. `<p>Code: {{ .Token }}</p>`. The link works in a browser tab; the code is what you type in the home-screen app, where links open in the browser instead.
+3. **Create your account.** Under Authentication → Users, add yourself with an email and password (tick Auto Confirm User); that's what you sign in to the app with. Then under Authentication → Sign In / Providers, turn off new sign-ups so nobody else can create an account.
 4. **Load the program.** In the SQL editor, run `supabase/seed.sql`. It attaches everything to your account and refuses to run twice.
 5. **Record training maxes** in pounds. Replace the three placeholders and the date:
    ```sql

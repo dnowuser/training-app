@@ -101,6 +101,6 @@ These apply to every Claude, whether in a coding session or in chat through the 
 
 ## Status
 
-- Done: schema, generator functions, seed data for the current program, app shell, tests. Phase 1 so far: email sign-in (code or link, no sign-ups), Today screen (ladder loads from the training max, one-tap set logging with edit/undo, skip, finish), rest timer.
+- Done: schema, generator functions, seed data for the current program, app shell, tests. Phase 1 so far: email and password sign-in (no sign-ups), Today screen (ladder loads from the training max, one-tap set logging with edit/undo, skip, finish), rest timer.
 - Next (phase 1): create the Supabase project and connect it to claude.ai, run the migration and seed, record training maxes, start Cycle 1. Then the Calendar and Day detail, and offline queueing of sets. Deploy to Vercel.
 - Open decisions are listed at the end of docs/app-plan.md.
