@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { latestTrainingMaxes, type SetValues } from './logging'
+import { groupHistory, type PastSession, type PastSet } from './progression'
 import type { Exercise, FeatStep, LoggedSet, Session, SessionExercise } from './types'
 
 export type DaySession = Session & { slot: { mobility: string | null } | null }
@@ -22,6 +23,8 @@ export interface Day {
   trainingMaxes: Map<string, number>
   /** Ladders for the day's skill exercises, by feat id. */
   ladders: Record<string, Ladder>
+  /** Earlier sessions of each of the day's exercises (before this date), newest first, by slug. */
+  history: Record<string, PastSession[]>
 }
 
 function check<T>({ data, error }: { data: T | null; error: { message: string } | null }): T {
@@ -39,7 +42,7 @@ export async function loadDay(db: SupabaseClient, date: string): Promise<Day> {
       .order('slot_id', { ascending: true, nullsFirst: false })
       .order('created_at'),
   )
-  if (sessions.length === 0) return { sessions, exercises: [], sets: [], trainingMaxes: new Map(), ladders: {} }
+  if (sessions.length === 0) return { sessions, exercises: [], sets: [], trainingMaxes: new Map(), ladders: {}, history: {} }
 
   const exercises = check<DayExercise[]>(
     await db
@@ -54,7 +57,9 @@ export async function loadDay(db: SupabaseClient, date: string): Promise<Day> {
   const exerciseIds = [...new Set(exercises.map((e) => e.exercise_id))]
   const featIds = [...new Set(exercises.flatMap((e) => (e.exercise.feat_id ? [e.exercise.feat_id] : [])))]
 
-  const [sets, maxes, feats] = await Promise.all([
+  const slugs = [...new Set(exercises.map((e) => e.exercise.slug))]
+
+  const [sets, maxes, feats, past] = await Promise.all([
     exercises.length
       ? db
           .from('sets')
@@ -77,6 +82,16 @@ export async function loadDay(db: SupabaseClient, date: string): Promise<Day> {
           .order('created_at', { ascending: false })
       : { data: [], error: null },
     featIds.length ? db.from('feats').select('id, name, slug, steps:feat_steps(*)').in('id', featIds) : { data: [], error: null },
+    slugs.length
+      ? db
+          .from('session_log')
+          .select('date, exercise_slug, set_number, is_warmup, reps, load_lb, seconds, distance_m, rpe, hit_target')
+          .not('set_id', 'is', null)
+          .in('exercise_slug', slugs)
+          .lt('date', date)
+          .order('date', { ascending: false })
+          .limit(500)
+      : { data: [], error: null },
   ])
   const ladders: Record<string, Ladder> = {}
   for (const f of check<Ladder[]>(feats)) ladders[f.id] = { ...f, steps: [...f.steps].sort((a, b) => a.step_number - b.step_number) }
@@ -87,6 +102,16 @@ export async function loadDay(db: SupabaseClient, date: string): Promise<Day> {
     sets: check<LoggedSet[]>(sets),
     trainingMaxes: latestTrainingMaxes(check<{ exercise_id: string | null; value: number }[]>(maxes)),
     ladders,
+    history: groupHistory(
+      check<(PastSet & { date: string; exercise_slug: string })[]>(past).map((r) => ({
+        ...r,
+        reps: r.reps === null ? null : Number(r.reps),
+        load_lb: r.load_lb === null ? null : Number(r.load_lb),
+        seconds: r.seconds === null ? null : Number(r.seconds),
+        distance_m: r.distance_m === null ? null : Number(r.distance_m),
+        rpe: r.rpe === null ? null : Number(r.rpe),
+      })),
+    ),
   }
 }
 
@@ -95,6 +120,7 @@ export interface NewSet extends SetValues {
   set_number: number
   is_warmup: boolean
   hit_target: boolean
+  rpe?: number | null
   note?: string | null
 }
 
@@ -102,10 +128,42 @@ export async function insertSet(db: SupabaseClient, set: NewSet): Promise<Logged
   return check<LoggedSet>(await db.from('sets').insert(set).select().single())
 }
 
+export async function updateSetRpe(db: SupabaseClient, id: string, rpe: number | null): Promise<LoggedSet> {
+  return check<LoggedSet>(await db.from('sets').update({ rpe }).eq('id', id).select().single())
+}
+
+/**
+ * Record a new training max, effective from `from` (the day after the session
+ * that earned it, so that day's loads don't shift), with a change-log row.
+ */
+export async function recordTrainingMax(
+  db: SupabaseClient,
+  exercise: Exercise,
+  value: number,
+  from: string,
+  reason: string,
+): Promise<boolean> {
+  const existing = check<{ id: string }[]>(
+    await db.from('metrics').select('id').eq('kind', 'training_max').eq('exercise_id', exercise.id).eq('measured_on', from),
+  )
+  if (existing.length) return false
+  check(await db.from('metrics').insert({ kind: 'training_max', exercise_id: exercise.id, value, unit: 'lb', measured_on: from, note: reason }))
+  check(
+    await db.from('changes').insert({
+      author: 'app',
+      summary: `${exercise.name} training max set to ${value} lb`,
+      reason,
+      affects_from: from,
+      details: {},
+    }),
+  )
+  return true
+}
+
 export async function updateSet(
   db: SupabaseClient,
   id: string,
-  patch: SetValues & { hit_target: boolean; note?: string | null },
+  patch: SetValues & { hit_target: boolean; note?: string | null; rpe?: number | null },
 ): Promise<LoggedSet> {
   // Fields left blank in the editor are cleared, not kept.
   const row = {
@@ -116,6 +174,7 @@ export async function updateSet(
     contacts: patch.contacts ?? null,
     hit_target: patch.hit_target,
     note: patch.note ?? null,
+    rpe: patch.rpe ?? null,
   }
   return check<LoggedSet>(await db.from('sets').update(row).eq('id', id).select().single())
 }
@@ -156,7 +215,7 @@ export function cachedDay(date: string): Day | null {
     const raw = localStorage.getItem(`day:${date}`)
     if (!raw) return null
     const parsed = JSON.parse(raw) as Omit<Day, 'trainingMaxes'> & { trainingMaxes: [string, number][] }
-    return { ...parsed, ladders: parsed.ladders ?? {}, trainingMaxes: new Map(parsed.trainingMaxes) }
+    return { ...parsed, ladders: parsed.ladders ?? {}, history: parsed.history ?? {}, trainingMaxes: new Map(parsed.trainingMaxes) }
   } catch {
     return null
   }

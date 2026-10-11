@@ -573,6 +573,7 @@ function CycleTab() {
             {week && cycle.deload_weeks.includes(week) ? ' · deload week' : ''}
           </p>
           <p className="text-sm text-neutral-500">Deload weeks: {cycle.deload_weeks.join(', ')}</p>
+          {cycle.notes && <p className="mt-2 rounded-lg bg-neutral-100 p-2 text-sm dark:bg-neutral-800">{cycle.notes}</p>}
           <p className="mt-2 text-sm">Planned through {until ? formatDay(until) : '—'}.</p>
           {until && end && until < end && (
             <button type="button" onClick={() => void generateMore()} className="mt-3 h-12 w-full rounded-xl bg-neutral-900 font-semibold text-white dark:bg-white dark:text-neutral-900">

@@ -7,11 +7,13 @@ import {
   deleteSet,
   insertSet,
   loadDay,
+  recordTrainingMax,
   removeSessionExercise,
   setSkipped,
   updateSession,
   updateSessionExercise,
   updateSet,
+  updateSetRpe,
   type Day,
   type DayExercise,
   type DaySession,
@@ -33,9 +35,18 @@ import {
   type SetField,
   type SetValues,
 } from '../lib/logging'
-import { localISODate } from '../lib/dates'
+import { addDays, localISODate } from '../lib/dates'
 import { markStep } from '../lib/feats'
 import { describePrescription, plannedSets, type PlannedSet } from '../lib/prescription'
+import {
+  describeLastTime,
+  nextLoad,
+  readyToMoveUp,
+  RPE_OPTIONS,
+  topPlannedSet,
+  trainingMaxUpdate,
+  type PastSession,
+} from '../lib/progression'
 import { useRestTimer } from '../lib/restTimer'
 import { dequeue, enqueue, isNetworkError, pendingSet, QUEUE_EVENT, queuedAsLogged, readQueue } from '../lib/offline'
 import { supabase } from '../lib/supabase'
@@ -262,6 +273,7 @@ function SessionView({
   const timer = useRestTimer()
   const [editing, setEditing] = useState<string | null>(null)
   const [editingItem, setEditingItem] = useState<DayExercise | null>(null)
+  const [tmNotes, setTmNotes] = useState<string[]>([])
   // The stored prescription stays as planned; the card follows the current ladder step.
   const items = day.exercises
     .filter((e) => e.session_id === session.id)
@@ -291,7 +303,7 @@ function SessionView({
     }
   }
 
-  async function log(item: DayExercise, row: Row, values: SetValues, note?: string) {
+  async function log(item: DayExercise, row: Row, values: SetValues, note?: string, rpe?: number | null) {
     const planned = row.planned
     const measure = item.exercise.measure
     const set: NewSet = {
@@ -300,6 +312,7 @@ function SessionView({
       is_warmup: planned?.isWarmup ?? false,
       hit_target: planned ? hitTarget(planned, measure, values) : true,
       note: note || null,
+      rpe: rpe ?? null,
       ...values,
     }
     // Show it straight away; swap in the saved row when the insert returns.
@@ -329,8 +342,8 @@ function SessionView({
     }
   }
 
-  async function save(item: DayExercise, row: Row, values: SetValues, note: string) {
-    if (!row.logged) return log(item, row, values, note)
+  async function save(item: DayExercise, row: Row, values: SetValues, note: string, rpe: number | null) {
+    if (!row.logged) return log(item, row, values, note, rpe)
     const hit = row.planned ? hitTarget(row.planned, item.exercise.measure, values) : true
     if (isQueued(row.logged)) {
       // Not sent yet: replace it in the queue.
@@ -338,7 +351,7 @@ function SessionView({
       dequeue(id)
       enqueue({
         tempId: id,
-        set: { session_exercise_id, set_number, is_warmup, hit_target: hit, note: note || null, ...values },
+        set: { session_exercise_id, set_number, is_warmup, hit_target: hit, note: note || null, rpe, ...values },
         queuedAt: nowISO(),
       })
       setEditing(null)
@@ -348,6 +361,7 @@ function SessionView({
       const saved = await updateSet(db, row.logged.id, {
         ...values,
         note: note || null,
+        rpe,
         hit_target: row.planned ? hitTarget(row.planned, item.exercise.measure, values) : true,
       })
       patchSets((sets) => sets.map((s) => (s.id === saved.id ? saved : s)))
@@ -355,6 +369,56 @@ function SessionView({
     } catch (e) {
       report(e)
     }
+  }
+
+  /** One tap on an RPE chip right after logging a set. */
+  async function setRpe(set: LoggedSet, rpe: number) {
+    if (isInFlight(set)) return
+    if (isQueued(set)) {
+      const queued = readQueue().find((q) => q.tempId === set.id)
+      if (!queued) return
+      dequeue(set.id)
+      enqueue({ ...queued, set: { ...queued.set, rpe } })
+      return
+    }
+    patchSets((sets) => sets.map((s) => (s.id === set.id ? { ...s, rpe } : s)))
+    try {
+      await updateSetRpe(db, set.id, rpe)
+    } catch (e) {
+      if (isNetworkError(e)) return onError('No signal: that RPE wasn’t saved. Tap it again when you’re back online.')
+      report(e)
+    }
+  }
+
+  /**
+   * After a heavy ladder session, move each lift's training max by how its top
+   * set went (see trainingMaxUpdate). Takes effect from tomorrow so today's
+   * loads don't shift; a second Finish on the same day doesn't move it again.
+   */
+  async function adjustTrainingMaxes(): Promise<string[]> {
+    const notes: string[] = []
+    for (const item of items) {
+      const original = stored.get(item.id) ?? item
+      if (original.prescription.scheme !== 'ladder' || item.skipped) continue
+      const tm = day.trainingMaxes.get(item.exercise_id)
+      if (!tm) continue
+      const top = topPlannedSet(plannedSets(original.prescription, tm))
+      if (!top) continue
+      const logged = setsFor(item.id).find((s) => s.set_number === top.setNumber && !isInFlight(s) && !isQueued(s))
+      const update = trainingMaxUpdate(tm, item.exercise.slug, logged, top.reps ?? 1, session.is_deload)
+      const name = item.exercise.name
+      if (!update) {
+        notes.push(`${name}: training max stays ${tm} lb${logged?.rpe ? ` (top set RPE ${logged.rpe})` : ''}.`)
+        continue
+      }
+      const saved = await recordTrainingMax(db, item.exercise, update.to, addDays(session.date, 1), `Auto: ${update.reason}`)
+      notes.push(
+        saved
+          ? `${name}: training max ${update.from} → ${update.to} lb next time (${update.reason}).`
+          : `${name}: training max already updated for this session.`,
+      )
+    }
+    return notes
   }
 
   async function remove(set: LoggedSet) {
@@ -428,6 +492,7 @@ function SessionView({
         }),
       )
       timer.stop()
+      setTmNotes(await adjustTrainingMaxes())
     } catch (e) {
       report(e)
     }
@@ -484,7 +549,9 @@ function SessionView({
               editing={editing}
               setEditing={setEditing}
               onLog={(row, values) => void log(item, row, values)}
-              onSave={(row, values, note) => void save(item, row, values, note)}
+              onSave={(row, values, note, rpe) => void save(item, row, values, note, rpe)}
+              onRpe={(set, rpe) => void setRpe(set, rpe)}
+              history={day.history[item.exercise.slug] ?? []}
               onDelete={(set) => void remove(set)}
               onSkip={() => void toggleSkip(item)}
               onEdit={() => setEditingItem(item)}
@@ -511,6 +578,17 @@ function SessionView({
           </div>
         ))}
       </div>
+
+      {tmNotes.length > 0 && (
+        <div className="mt-6 rounded-2xl border border-emerald-500/40 bg-emerald-500/5 p-4 text-sm">
+          <p className="font-semibold">Next session's loads</p>
+          <ul className="mt-1 space-y-1">
+            {tmNotes.map((n) => (
+              <li key={n}>{n}</li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {items.length > 0 && session.status !== 'done' && (
         <button
@@ -551,6 +629,8 @@ function ExerciseCard({
   onEdit,
   ladder,
   onAdvanced,
+  onRpe,
+  history,
 }: {
   item: DayExercise
   rows: Row[]
@@ -559,7 +639,9 @@ function ExerciseCard({
   editing: string | null
   setEditing: (key: string | null) => void
   onLog: (row: Row, values: SetValues) => void
-  onSave: (row: Row, values: SetValues, note: string) => void
+  onSave: (row: Row, values: SetValues, note: string, rpe: number | null) => void
+  onRpe: (set: LoggedSet, rpe: number) => void
+  history: PastSession[]
   onDelete: (set: LoggedSet) => void
   onSkip: () => void
   onEdit: () => void
@@ -567,6 +649,10 @@ function ExerciseCard({
   onAdvanced: () => void
 }) {
   const p = item.prescription
+  const last = history[0]
+  const suggestion = MEASURE_FIELDS[item.exercise.measure].includes('load_lb') ? nextLoad(p, last) : null
+  // RPE is asked for on work sets, not warm-ups, timed blocks or mobility.
+  const asksRpe = item.block !== 'warmup' && item.block !== 'mobility'
   const measure = item.exercise.measure
   const usesTm = p.scheme === 'ladder' || p.pct_tm !== undefined
   const timed = isTimedBlock(p)
@@ -579,7 +665,7 @@ function ExerciseCard({
     rows
       .filter((r) => r.setNumber < setNumber && r.logged?.load_lb != null)
       .map((r) => Number(r.logged!.load_lb))
-      .at(-1)
+      .at(-1) ?? suggestion?.load
 
   return (
     <article
@@ -609,7 +695,13 @@ function ExerciseCard({
       </header>
       {item.notes && <p className="mt-1 text-sm">{item.notes}</p>}
       {item.exercise.cues && <p className="mt-2 text-sm text-neutral-600 dark:text-neutral-300">{item.exercise.cues}</p>}
-      {ladder && <LadderStep ladder={ladder} onAdvanced={onAdvanced} />}
+      {last && (
+        <p className="mt-2 text-sm">
+          <span className="text-neutral-500">Last time ({formatShort(last.date)}):</span> {describeLastTime(last)}
+          {suggestion && <span className="block font-medium text-emerald-700 dark:text-emerald-400">Today: {suggestion.load} lb · {suggestion.note}</span>}
+        </p>
+      )}
+      {ladder && <LadderStep ladder={ladder} history={history} onAdvanced={onAdvanced} />}
 
       {!item.skipped && (
         <ul className="mt-3 space-y-2">
@@ -627,8 +719,10 @@ function ExerciseCard({
                     measure={measure}
                     initial={row.logged ? loggedValues(row.logged) : defaults}
                     initialNote={row.logged?.note ?? ''}
+                    initialRpe={row.logged?.rpe ?? null}
+                    asksRpe={asksRpe && !row.planned?.isWarmup}
                     onCancel={() => setEditing(null)}
-                    onSave={(values, note) => onSave(row, values, note)}
+                    onSave={(values, note, rpe) => onSave(row, values, note, rpe)}
                     onDelete={row.logged && !isInFlight(row.logged) ? () => onDelete(row.logged!) : undefined}
                   />
                 ) : (
@@ -637,6 +731,8 @@ function ExerciseCard({
                     number={row.planned?.isWarmup ? `W${row.setNumber}` : String(row.setNumber - warmups)}
                     label={timed ? describePrescription(p) : row.planned ? describeTarget(row.planned) : `Set ${row.setNumber}`}
                     isNext={key === nextKey}
+                    asksRpe={asksRpe && !timed && !row.planned?.isWarmup}
+                    onRpe={(rpe) => row.logged && onRpe(row.logged, rpe)}
                     onTap={() => (row.logged && isInFlight(row.logged) ? undefined : setEditing(key))}
                     onCheck={() =>
                       needsInput(measure, defaults) && !timed ? setEditing(key) : onLog(row, defaults)
@@ -652,10 +748,10 @@ function ExerciseCard({
                 measure={measure}
                 initial={lastValues(rows)}
                 initialNote=""
+                initialRpe={null}
+                asksRpe={asksRpe}
                 onCancel={() => setEditing(null)}
-                onSave={(values, note) =>
-                  onSave({ setNumber: Number(extraKey.split(':')[1]) }, values, note)
-                }
+                onSave={(values, note, rpe) => onSave({ setNumber: Number(extraKey.split(':')[1]) }, values, note, rpe)}
               />
             </li>
           ) : (
@@ -675,6 +771,12 @@ function ExerciseCard({
       )}
     </article>
   )
+}
+
+/** "Oct 13" */
+function formatShort(isoDate: string): string {
+  const [y, m, d] = isoDate.split('-').map(Number)
+  return new Date(y, m - 1, d).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
 }
 
 /** A timed block logs its length as seconds where the measure takes seconds. */
@@ -704,13 +806,16 @@ function lastValues(rows: Row[]): SetValues {
  * The step of the feat ladder this exercise practises (the first not yet hit),
  * how to do it, and a button to move up once it's earned.
  */
-function LadderStep({ ladder, onAdvanced }: { ladder: Ladder; onAdvanced: () => void }) {
+function LadderStep({ ladder, history, onAdvanced }: { ladder: Ladder; history: PastSession[]; onAdvanced: () => void }) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const main = ladder.steps.filter((s) => !s.is_bonus)
   const current = ladder.steps.find((s) => !s.achieved_on)
   if (!current) return <p className="mt-3 rounded-xl bg-emerald-500/10 p-3 text-sm">Every step of {ladder.name} is done.</p>
   const next = ladder.steps.find((s) => s.step_number > current.step_number)
+  // Sessions on this step only: after the previous step was hit.
+  const since = ladder.steps.filter((s) => s.achieved_on && s.step_number < current.step_number).at(-1)?.achieved_on ?? ''
+  const ready = readyToMoveUp(history.filter((s) => s.date > since))
 
   async function advance() {
     if (!current) return
@@ -734,6 +839,11 @@ function LadderStep({ ladder, onAdvanced }: { ladder: Ladder; onAdvanced: () => 
       <p className="mt-0.5 font-semibold">{current.description}</p>
       {current.how && <p className="mt-1 text-sm">{current.how}</p>}
       {next && <p className="mt-1 text-xs text-neutral-500">Next: {next.description}</p>}
+      {ready && (
+        <p className="mt-2 rounded-lg bg-violet-600/10 p-2 text-sm font-medium">
+          You've hit your targets 3 sessions in a row on this step. If today goes well too, tap “I hit this step”.
+        </p>
+      )}
       {error && <p className="mt-1 text-sm text-red-600">{error}</p>}
       <div className="mt-2 flex items-center justify-between gap-2">
         <button
@@ -759,6 +869,8 @@ function SetRow({
   isNext,
   onTap,
   onCheck,
+  asksRpe,
+  onRpe,
 }: {
   row: Row
   number: string
@@ -766,11 +878,15 @@ function SetRow({
   isNext: boolean
   onTap: () => void
   onCheck: () => void
+  asksRpe: boolean
+  onRpe: (rpe: number) => void
 }) {
   const { planned, logged } = row
   const pending = logged && (isInFlight(logged) || isQueued(logged))
+  const promptRpe = asksRpe && logged && logged.rpe === null && !isInFlight(logged)
 
   return (
+    <>
     <div
       className={`flex items-center gap-3 rounded-xl px-3 py-2 ${isNext ? 'bg-emerald-500/10 ring-2 ring-emerald-500' : 'bg-neutral-100 dark:bg-neutral-800/60'}`}
     >
@@ -780,7 +896,10 @@ function SetRow({
       <button type="button" onClick={onTap} className="min-w-0 flex-1 py-1 text-left">
         {logged ? (
           <>
-            <span className="block text-base font-medium">{describeLogged(logged)}</span>
+            <span className="block text-base font-medium">
+              {describeLogged(logged)}
+              {logged.rpe !== null && <span className="ml-1.5 text-sm font-normal text-neutral-500">RPE {Number(logged.rpe)}</span>}
+            </span>
             {planned && <span className="block text-xs text-neutral-500">Target {label}</span>}
             {logged.note && <span className="block text-xs text-neutral-500 italic">{logged.note}</span>}
             {isQueued(logged) && <span className="block text-xs text-amber-600">Saved on this phone, sends when online</span>}
@@ -807,6 +926,31 @@ function SetRow({
         </button>
       )}
     </div>
+    {promptRpe && (
+      <div className="mt-1 px-1">
+        <p className="text-xs text-neutral-500">How hard? RPE (10 = nothing left, 9 = 1 more rep, 8 = 2 more)</p>
+        <RpeChips value={null} onPick={onRpe} />
+      </div>
+    )}
+    </>
+  )
+}
+
+function RpeChips({ value, onPick }: { value: number | null; onPick: (rpe: number) => void }) {
+  return (
+    <div className="mt-1 flex gap-1">
+      {RPE_OPTIONS.map((r) => (
+        <button
+          key={r}
+          type="button"
+          onClick={() => onPick(r)}
+          aria-label={`RPE ${r}`}
+          className={`h-10 min-w-0 flex-1 rounded-lg text-sm font-medium ${value === r ? 'bg-emerald-600 text-white' : 'bg-white dark:bg-neutral-900'} border border-neutral-300 dark:border-neutral-700`}
+        >
+          {r}
+        </button>
+      ))}
+    </div>
   )
 }
 
@@ -814,6 +958,8 @@ function SetEditor({
   measure,
   initial,
   initialNote,
+  initialRpe,
+  asksRpe,
   onSave,
   onCancel,
   onDelete,
@@ -821,7 +967,9 @@ function SetEditor({
   measure: DayExercise['exercise']['measure']
   initial: SetValues
   initialNote: string
-  onSave: (values: SetValues, note: string) => void
+  initialRpe: number | null
+  asksRpe: boolean
+  onSave: (values: SetValues, note: string, rpe: number | null) => void
   onCancel: () => void
   onDelete?: () => void
 }) {
@@ -832,6 +980,7 @@ function SetEditor({
     return out
   })
   const [note, setNote] = useState(initialNote)
+  const [rpe, setRpe] = useState<number | null>(initialRpe === null ? null : Number(initialRpe))
 
   const bump = (f: SetField, by: number) =>
     setText((t) => ({ ...t, [f]: String(Math.max(0, (Number(t[f]) || 0) + by)) }))
@@ -842,7 +991,7 @@ function SetEditor({
       const n = Number(text[f])
       if (text[f].trim() !== '' && Number.isFinite(n)) values[f] = n
     }
-    onSave(values, note.trim())
+    onSave(values, note.trim(), rpe)
   }
 
   return (
@@ -875,6 +1024,12 @@ function SetEditor({
           </button>
         </div>
       ))}
+      {asksRpe && (
+        <div className="mb-2">
+          <p className="text-xs text-neutral-500">RPE (10 = nothing left, 9 = 1 more rep, 8 = 2 more)</p>
+          <RpeChips value={rpe} onPick={(r) => setRpe(rpe === r ? null : r)} />
+        </div>
+      )}
       <input
         value={note}
         onChange={(e) => setNote(e.target.value)}

@@ -100,7 +100,7 @@ export function pendingSet(id: string, set: NewSet, loggedAt: string): LoggedSet
     seconds: set.seconds ?? null,
     distance_m: set.distance_m ?? null,
     contacts: set.contacts ?? null,
-    rpe: null,
+    rpe: set.rpe ?? null,
     hit_target: set.hit_target,
     note: set.note ?? null,
     logged_at: loggedAt,
