@@ -94,6 +94,8 @@ Every feat gets a chart with its target drawn in, so the gap to each goal is vis
 
 Daily logging ships first because feats, charts and Claude's reviews all depend on its data. Move on when the gate is met.
 
+All three phases' screens are built (October 2026). The gates still apply to how they're used: two weeks of friction-free logging before leaning on feats and charts.
+
 1. **Phase 1, set up and log today:** Supabase project, connector on, database seeded with the current plan. Sign-in, Today screen, set logging, rest timer, Calendar, Day detail, offline set queue. Deploy to Vercel.
    - **Gate:** two weeks of logging with no friction. Every session logged in the app, and Claude can answer questions about the week from chat.
 2. **Phase 2, feats, media and charts:** feat tracker with ladders, photo and video uploads, progress charts with target lines.

@@ -123,3 +123,122 @@ export async function updateSession(
 export async function setSkipped(db: SupabaseClient, id: string, skipped: boolean): Promise<void> {
   check(await db.from('session_exercises').update({ skipped }).eq('id', id))
 }
+
+// ---------------------------------------------------------------------------
+// Offline copy of a day, so the gym screen still opens without signal
+// ---------------------------------------------------------------------------
+
+export function cacheDay(date: string, day: Day) {
+  try {
+    localStorage.setItem(`day:${date}`, JSON.stringify({ ...day, trainingMaxes: [...day.trainingMaxes] }))
+  } catch {
+    // Storage full or blocked; the screen still works online.
+  }
+}
+
+export function cachedDay(date: string): Day | null {
+  try {
+    const raw = localStorage.getItem(`day:${date}`)
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as Omit<Day, 'trainingMaxes'> & { trainingMaxes: [string, number][] }
+    return { ...parsed, trainingMaxes: new Map(parsed.trainingMaxes) }
+  } catch {
+    return null
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Editing a session by hand (Day detail). Each edit marks the session
+// customized so regeneration leaves it alone, and writes a change-log row.
+// ---------------------------------------------------------------------------
+
+export async function logChange(
+  db: SupabaseClient,
+  change: { summary: string; reason?: string | null; affects_from?: string | null; details?: Record<string, unknown> },
+): Promise<void> {
+  check(
+    await db.from('changes').insert({
+      author: 'user',
+      summary: change.summary,
+      reason: change.reason || null,
+      affects_from: change.affects_from ?? null,
+      details: change.details ?? {},
+    }),
+  )
+}
+
+export async function markCustomized(db: SupabaseClient, sessionId: string): Promise<void> {
+  check(await db.from('sessions').update({ customized: true }).eq('id', sessionId))
+}
+
+export async function moveSession(db: SupabaseClient, session: Session, toDate: string): Promise<void> {
+  const patch = { date: toDate, customized: true, moved_from: session.moved_from ?? (session.slot_id ? session.date : null) }
+  check(await db.from('sessions').update(patch).eq('id', session.id))
+  await logChange(db, {
+    summary: `Moved ${session.name} from ${session.date} to ${toDate}`,
+    affects_from: session.date < toDate ? session.date : toDate,
+    details: { session_id: session.id, from: session.date, to: toDate },
+  })
+}
+
+export async function updateSessionNotes(db: SupabaseClient, id: string, notes: string): Promise<void> {
+  check(await db.from('sessions').update({ notes: notes || null }).eq('id', id))
+}
+
+export async function updateSessionExercise(
+  db: SupabaseClient,
+  item: DayExercise,
+  session: Session,
+  patch: Pick<SessionExercise, 'prescription' | 'notes'>,
+  reason?: string,
+): Promise<void> {
+  check(await db.from('session_exercises').update(patch).eq('id', item.id))
+  await markCustomized(db, session.id)
+  await logChange(db, {
+    summary: `${item.exercise.name} on ${session.date} changed for that day only`,
+    reason,
+    affects_from: session.date,
+    details: { session_exercise_id: item.id, before: item.prescription, after: patch.prescription },
+  })
+}
+
+export async function addSessionExercise(
+  db: SupabaseClient,
+  session: Session,
+  exercise: Exercise,
+  block: SessionExercise['block'],
+  prescription: SessionExercise['prescription'],
+  position: number,
+): Promise<void> {
+  check(
+    await db.from('session_exercises').insert({ session_id: session.id, exercise_id: exercise.id, block, prescription, position }),
+  )
+  await markCustomized(db, session.id)
+  await logChange(db, {
+    summary: `Added ${exercise.name} to ${session.name} on ${session.date}`,
+    affects_from: session.date,
+  })
+}
+
+/** Only for an exercise with no logged sets; the database refuses otherwise. */
+export async function removeSessionExercise(db: SupabaseClient, item: DayExercise, session: Session): Promise<void> {
+  check(await db.from('session_exercises').delete().eq('id', item.id))
+  await markCustomized(db, session.id)
+  await logChange(db, {
+    summary: `Removed ${item.exercise.name} from ${session.name} on ${session.date}`,
+    affects_from: session.date,
+    details: { prescription: item.prescription },
+  })
+}
+
+export async function listExercises(db: SupabaseClient): Promise<Exercise[]> {
+  return check<Exercise[]>(await db.from('exercises').select('*').order('name'))
+}
+
+export { check }
+
+/** A hand-added session (slot_id null), e.g. an extra workout or a rest-day session. */
+export async function addSession(db: SupabaseClient, date: string, name: string): Promise<void> {
+  check(await db.from('sessions').insert({ date, name, day_type: 'easy' }))
+  await logChange(db, { summary: `Added a session "${name}" on ${date}`, affects_from: date })
+}

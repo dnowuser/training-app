@@ -169,6 +169,19 @@ await test('logged sets protect a session from deletion and regeneration', async
   await assert.rejects(db.query(`delete from sessions where date = $1::date`, [CYCLE_START]), /foreign key/)
 })
 
+await test('a moved session stays moved and its old date is not regenerated', async () => {
+  const before = await one(`select count(*)::int as n from sessions`)
+  // Tue Oct 27 onto Wed Oct 28, which keeps its own session
+  await db.query(`update sessions set moved_from = date, date = '2026-10-28', customized = true where date = '2026-10-27' and slot_id is not null`)
+  await db.query(`select regenerate_sessions($1::date, $1::date + 83)`, [CYCLE_START])
+  const oct27 = await one(`select count(*)::int as n from sessions where date = '2026-10-27'`)
+  assert.equal(oct27.n, 0, 'the old date stays empty')
+  const oct28 = await one(`select count(*)::int as n from sessions where date = '2026-10-28'`)
+  assert.equal(oct28.n, 2, 'the moved session sits next to that day\'s own session')
+  const after = await one(`select count(*)::int as n from sessions`)
+  assert.equal(after.n, before.n)
+})
+
 await test('views report sets and feat progress', async () => {
   const logged = await one(`select count(*)::int as n from session_log where set_id is not null`)
   assert.equal(logged.n, 1)

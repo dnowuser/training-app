@@ -3,6 +3,7 @@ import { useAuthSession } from '../lib/auth'
 import { supabase } from '../lib/supabase'
 import { RestTimerBar, RestTimerProvider } from './RestTimer'
 import { SignIn } from './SignIn'
+import { SyncBanner } from './SyncBanner'
 
 const tabs = [
   { to: '/', label: 'Today', end: true },
@@ -32,6 +33,7 @@ export function Layout() {
             Not connected to Supabase yet. Copy <code>.env.example</code> to <code>.env.local</code> and fill it in.
           </p>
         )}
+        <SyncBanner />
         <main className="flex-1 px-4 pt-6 pb-48" style={{ paddingTop: 'max(1.5rem, env(safe-area-inset-top))' }}>
           <Outlet />
         </main>
