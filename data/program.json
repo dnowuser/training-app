@@ -1,0 +1,395 @@
+{
+  "$comment": "Source for supabase/seed.sql (npm run seed:generate). After setup the database is the source of truth; edit the plan there, not here.",
+  "exercises": [
+    { "slug": "free-movement", "name": "Free movement flow", "area": "movement", "measure": "duration", "cues": "Crawl, roll and flow between squat, 90/90, lunge and bridge with no plan." },
+    { "slug": "jump-rope", "name": "Jump rope", "area": "movement", "measure": "duration", "cues": "Basic bounce, then alternating feet, then double-unders." },
+    { "slug": "band-walks", "name": "Band walks", "area": "accessory", "measure": "reps", "cues": "Mini band above the knees, steps each way." },
+    { "slug": "rolling-practice", "name": "Rolling practice", "area": "movement", "measure": "duration", "cues": "Forward and back rolls, then shoulder rolls, then breakfalls." },
+
+    { "slug": "handstand-practice", "name": "Handstand practice", "area": "calisthenics", "measure": "hold", "cues": "Work your current handstand ladder step. Log your best hold in seconds." },
+    { "slug": "front-lever", "name": "Front lever", "area": "calisthenics", "measure": "hold", "cues": "Current ladder step: tuck, advanced tuck, straddle, full. Done fresh, before pulling." },
+    { "slug": "muscle-up", "name": "Muscle-up", "area": "calisthenics", "measure": "reps", "cues": "Crisp reps only." },
+    { "slug": "handstand-push-up", "name": "Handstand push-up", "area": "calisthenics", "measure": "reps", "cues": "Current ladder step, from pike push-ups to full-range wall handstand push-ups." },
+    { "slug": "wrist-prep", "name": "Wrist prep", "area": "calisthenics", "measure": "duration", "cues": "Wrist circles, rocks and loaded stretches before hand balancing and planche work." },
+    { "slug": "planche-lean", "name": "Planche lean", "area": "calisthenics", "measure": "hold", "cues": "Hands turned out, shoulders past the wrists, shoulder blades pushed apart." },
+    { "slug": "pike-compression-lift", "name": "Pike compression lift", "area": "calisthenics", "measure": "reps", "cues": "Seated pike, hands beside the knees, lift both heels." },
+    { "slug": "pike-pulse", "name": "Pike pulse", "area": "calisthenics", "measure": "reps", "cues": "Seated pike, hands off the floor, pull forward with the hip flexors." },
+    { "slug": "tuck-l-sit", "name": "Tuck L-sit", "area": "calisthenics", "measure": "hold", "cues": "Shoulders down, knees to chest." },
+    { "slug": "backflip-progression", "name": "Backflip progression", "area": "calisthenics", "measure": "duration", "cues": "Current backflip ladder step. Open gym with mats and a coach; no first attempts on hard ground." },
+
+    { "slug": "max-intent-jumps", "name": "Max-intent approach jumps", "area": "jumping", "measure": "contacts", "cues": "Full approach at the rim, full rest between jumps. Stop when jumps get slower." },
+    { "slug": "reactive-jumps", "name": "Reactive jumps", "area": "jumping", "measure": "contacts", "cues": "Pogos, hurdle hops, bounds and lateral bounds. Short ground contacts." },
+
+    { "slug": "back-squat", "name": "Back squat", "area": "lifting", "measure": "load_reps", "cues": null },
+    { "slug": "bench-press", "name": "Bench press", "area": "lifting", "measure": "load_reps", "cues": null },
+    { "slug": "deadlift", "name": "Deadlift", "area": "lifting", "measure": "load_reps", "cues": "Conventional." },
+    { "slug": "weighted-pull-up", "name": "Weighted pull-up", "area": "lifting", "measure": "load_reps", "cues": "Log the added weight as the load." },
+    { "slug": "atg-split-squat", "name": "ATG split squat", "area": "lifting", "measure": "load_reps", "cues": "Front knee travels past the toes, back knee down." },
+
+    { "slug": "chest-supported-row", "name": "Chest-supported row", "area": "accessory", "measure": "load_reps", "cues": null },
+    { "slug": "prone-ytw", "name": "Prone Y-T-W", "area": "accessory", "measure": "reps", "cues": null },
+    { "slug": "med-ball-rotational-throw", "name": "Med ball rotational throw", "area": "accessory", "measure": "load_reps", "cues": "Throw hard into a wall; log the ball weight." },
+    { "slug": "pallof-press", "name": "Pallof press", "area": "accessory", "measure": "load_reps", "cues": null },
+    { "slug": "nordic-curl", "name": "Nordic curl", "area": "accessory", "measure": "reps", "cues": null },
+    { "slug": "hip-thrust", "name": "Hip thrust", "area": "accessory", "measure": "load_reps", "cues": null },
+    { "slug": "straddle-good-morning", "name": "Straddle good morning", "area": "accessory", "measure": "load_reps", "cues": "Light bar, wide stance, flat back." },
+    { "slug": "cossack-squat", "name": "Cossack squat", "area": "accessory", "measure": "load_reps", "cues": null },
+    { "slug": "copenhagen-plank", "name": "Copenhagen plank", "area": "accessory", "measure": "hold", "cues": null },
+    { "slug": "tib-raise", "name": "Tib raise", "area": "accessory", "measure": "reps", "cues": null },
+    { "slug": "hip-flexor-raise", "name": "Hip flexor raise", "area": "accessory", "measure": "reps", "cues": null },
+    { "slug": "bent-knee-calf-raise", "name": "Bent-knee calf raise", "area": "accessory", "measure": "load_reps", "cues": "Knees bent to load the soleus." },
+    { "slug": "foot-work", "name": "Foot work", "area": "accessory", "measure": "duration", "cues": "Foot strengthening." },
+    { "slug": "lateral-raise", "name": "Lateral raise", "area": "accessory", "measure": "load_reps", "cues": null },
+    { "slug": "incline-curl", "name": "Incline dumbbell curl", "area": "accessory", "measure": "load_reps", "cues": null },
+    { "slug": "hammer-curl", "name": "Hammer curl", "area": "accessory", "measure": "load_reps", "cues": null },
+    { "slug": "db-curl", "name": "Dumbbell curl", "area": "accessory", "measure": "load_reps", "cues": null },
+    { "slug": "overhead-triceps-extension", "name": "Overhead triceps extension", "area": "accessory", "measure": "load_reps", "cues": null },
+    { "slug": "triceps-pushdown", "name": "Triceps pushdown", "area": "accessory", "measure": "load_reps", "cues": null },
+    { "slug": "external-rotation", "name": "External rotation", "area": "accessory", "measure": "load_reps", "cues": null },
+    { "slug": "wrist-curl", "name": "Wrist curl", "area": "accessory", "measure": "load_reps", "cues": null },
+    { "slug": "reverse-curl", "name": "Reverse curl", "area": "accessory", "measure": "load_reps", "cues": null },
+    { "slug": "face-pull", "name": "Face pull", "area": "accessory", "measure": "load_reps", "cues": null },
+    { "slug": "suitcase-carry", "name": "Suitcase carry", "area": "accessory", "measure": "load_distance", "cues": "Log the weight per hand and the distance." },
+    { "slug": "neck-work", "name": "Neck work", "area": "accessory", "measure": "reps", "cues": "Light flexion, extension and side bends." },
+
+    { "slug": "sprint-acceleration", "name": "Sprint accelerations", "area": "running", "measure": "distance", "cues": "20–30 m from a standing start, full rest." },
+    { "slug": "sprint-flying", "name": "Flying sprints", "area": "running", "measure": "distance", "cues": "20 m flying after a build-up, full rest." },
+    { "slug": "interval-400", "name": "400 m intervals", "area": "running", "measure": "distance", "cues": "Mile goal pace: 90 s per 400 m (10 mph on a treadmill)." },
+    { "slug": "interval-1k", "name": "1 km intervals", "area": "running", "measure": "distance", "cues": "5K goal pace: 4:45 per km." },
+    { "slug": "zone2-run", "name": "Zone 2 run", "area": "running", "measure": "distance", "cues": "Conversational pace." },
+
+    { "slug": "front-split-pnf", "name": "Front split PNF", "area": "mobility", "measure": "duration", "cues": "Both sides, 2–3 rounds each. Hips square, blocks under the hands. Hold 20 s, contract 5–10 s at about 50%, relax deeper." },
+    { "slug": "mobility-a", "name": "Mobility A: hips and hamstrings", "area": "mobility", "measure": "duration", "cues": "Pike PNF 3 rounds, pancake PNF 3–4 rounds, rocking frog 90 s, middle split PNF against a wall or on sliders 3 rounds." },
+    { "slug": "mobility-b", "name": "Mobility B: shoulders, spine and hip rotation", "area": "mobility", "measure": "duration", "cues": "Bridge holds 3 x 20–30 s, wall slides and chin tucks 10 each, reverse prayer 60 s, open book 8 per side, lotus prep 60 s per side. Any knee pain means stop." },
+    { "slug": "yin-long-holds", "name": "Yin class or long holds", "area": "mobility", "measure": "duration", "cues": "Yin class, or 45 min of long holds on split, pancake, pike, bridge and lotus prep." },
+    { "slug": "long-holds", "name": "Long holds", "area": "mobility", "measure": "duration", "cues": "Split, pancake and bridge, plus passive holds: wall straddle 3–5 min, supported reclined hero 2 min, relaxed seated forward fold 2 min." }
+  ],
+
+  "ladder": {
+    "scheme": "ladder",
+    "warmups": [
+      { "pct": 40, "reps": 5 },
+      { "pct": 55, "reps": 3 },
+      { "pct": 70, "reps": 2 }
+    ],
+    "steps": [
+      { "pct": 79, "reps": 5 },
+      { "pct": 86, "reps": 3 },
+      { "pct": 91, "reps": 1 },
+      { "pct": 96, "reps": 1 }
+    ],
+    "rest_s": 180
+  },
+
+  "template": [
+    {
+      "weekday": 1,
+      "name": "Hard: jumps and squat",
+      "day_type": "hard",
+      "mobility": "A: hips and hamstrings",
+      "items": [
+        { "exercise": "free-movement", "block": "warmup", "prescription": { "minutes": 3 } },
+        { "exercise": "jump-rope", "block": "warmup", "prescription": { "minutes": 2, "minutes_max": 3 } },
+        { "exercise": "band-walks", "block": "warmup", "prescription": { "sets": 2, "reps": 15, "per_side": true } },
+        { "exercise": "handstand-practice", "block": "skill", "prescription": { "minutes": 10 } },
+        { "exercise": "max-intent-jumps", "block": "power", "prescription": { "contacts": 8, "contacts_max": 12, "rest_s": 90, "intensity": "max intent" }, "notes": "Full rest between jumps." },
+        { "exercise": "back-squat", "block": "strength", "prescription": "ladder" },
+        { "exercise": "back-squat", "block": "strength", "prescription": { "sets": 3, "reps": 5, "pct_tm": 75, "rest_s": 150 }, "notes": "Back-off sets." },
+        { "exercise": "tib-raise", "block": "accessory", "prescription": { "sets": 2, "reps": 15, "rest_s": 60 } },
+        { "exercise": "hip-flexor-raise", "block": "accessory", "prescription": { "sets": 2, "reps": 15, "rest_s": 60 } },
+        { "exercise": "bent-knee-calf-raise", "block": "accessory", "prescription": { "sets": 2, "reps": 15, "rest_s": 60 } },
+        { "exercise": "pike-compression-lift", "block": "accessory", "prescription": { "sets": 3, "reps": 10, "rest_s": 60 } },
+        { "exercise": "front-split-pnf", "block": "mobility", "prescription": { "minutes": 8 } },
+        { "exercise": "mobility-a", "block": "mobility", "prescription": { "minutes": 12 } }
+      ]
+    },
+    {
+      "weekday": 2,
+      "name": "Easy legs: upper strength, core and arms",
+      "day_type": "easy",
+      "mobility": "B: shoulders and spine",
+      "items": [
+        { "exercise": "free-movement", "block": "warmup", "prescription": { "minutes": 3 } },
+        { "exercise": "handstand-practice", "block": "skill", "prescription": { "minutes": 10 } },
+        { "exercise": "front-lever", "block": "skill", "prescription": { "sets": 4, "sets_max": 5, "seconds": 8, "seconds_max": 12, "rest_s": 120 }, "notes": "Fresh, before pulling." },
+        { "exercise": "bench-press", "block": "strength", "prescription": "ladder" },
+        { "exercise": "weighted-pull-up", "block": "strength", "prescription": { "sets": 4, "reps": 3, "reps_max": 5, "rest_s": 180 } },
+        { "exercise": "chest-supported-row", "block": "accessory", "prescription": { "sets": 3, "reps": 8, "rest_s": 90 } },
+        { "exercise": "prone-ytw", "block": "accessory", "prescription": { "sets": 2, "reps": 10, "rest_s": 60 } },
+        { "exercise": "med-ball-rotational-throw", "block": "accessory", "prescription": { "sets": 3, "reps": 5, "per_side": true, "rest_s": 60 } },
+        { "exercise": "pallof-press", "block": "accessory", "prescription": { "sets": 2, "reps": 10, "per_side": true, "rest_s": 60 } },
+        { "exercise": "lateral-raise", "block": "accessory", "prescription": { "sets": 3, "reps": 12, "reps_max": 15, "rest_s": 60 } },
+        { "exercise": "incline-curl", "block": "accessory", "prescription": { "sets": 3, "reps": 10, "rest_s": 60 } },
+        { "exercise": "overhead-triceps-extension", "block": "accessory", "prescription": { "sets": 3, "reps": 10, "rest_s": 60 } },
+        { "exercise": "front-split-pnf", "block": "mobility", "prescription": { "minutes": 8 } },
+        { "exercise": "mobility-b", "block": "mobility", "prescription": { "minutes": 12 } }
+      ]
+    },
+    {
+      "weekday": 3,
+      "name": "Hard: sprints and deadlift",
+      "day_type": "hard",
+      "mobility": "B: shoulders and spine",
+      "items": [
+        { "exercise": "free-movement", "block": "warmup", "prescription": { "minutes": 3 } },
+        { "exercise": "jump-rope", "block": "warmup", "prescription": { "minutes": 2, "minutes_max": 3 } },
+        { "exercise": "band-walks", "block": "warmup", "prescription": { "sets": 2, "reps": 15, "per_side": true } },
+        { "exercise": "handstand-practice", "block": "skill", "prescription": { "minutes": 10 } },
+        { "exercise": "sprint-acceleration", "block": "power", "prescription": { "sets": 4, "sets_max": 6, "distance_m": 25, "rest_s": 120 }, "notes": "20–30 m, full rest." },
+        { "exercise": "sprint-flying", "block": "power", "prescription": { "sets": 2, "sets_max": 3, "distance_m": 20, "rest_s": 180 } },
+        { "exercise": "deadlift", "block": "strength", "prescription": "ladder" },
+        { "exercise": "nordic-curl", "block": "accessory", "prescription": { "sets": 3, "reps": 4, "reps_max": 6, "rest_s": 120 } },
+        { "exercise": "hip-thrust", "block": "accessory", "prescription": { "sets": 3, "reps": 8, "rest_s": 90 } },
+        { "exercise": "straddle-good-morning", "block": "accessory", "prescription": { "sets": 3, "reps": 8, "rest_s": 90, "intensity": "light" } },
+        { "exercise": "cossack-squat", "block": "accessory", "prescription": { "sets": 2, "reps": 6, "per_side": true, "rest_s": 60 } },
+        { "exercise": "copenhagen-plank", "block": "accessory", "prescription": { "sets": 2, "seconds": 20, "per_side": true, "rest_s": 60 } },
+        { "exercise": "front-split-pnf", "block": "mobility", "prescription": { "minutes": 8 } },
+        { "exercise": "mobility-b", "block": "mobility", "prescription": { "minutes": 12 } }
+      ]
+    },
+    {
+      "weekday": 4,
+      "name": "Recovery",
+      "day_type": "recovery",
+      "mobility": "Yin or long holds",
+      "items": [
+        { "exercise": "yin-long-holds", "block": "mobility", "prescription": { "minutes": 45 } },
+        { "exercise": "foot-work", "block": "accessory", "prescription": { "minutes": 10 } },
+        { "exercise": "rolling-practice", "block": "skill", "prescription": { "minutes": 5 } }
+      ]
+    },
+    {
+      "weekday": 5,
+      "name": "Easy legs: upper volume and skills",
+      "day_type": "easy",
+      "mobility": "A: hips and hamstrings",
+      "items": [
+        { "exercise": "free-movement", "block": "warmup", "prescription": { "minutes": 3 } },
+        { "exercise": "handstand-practice", "block": "skill", "prescription": { "minutes": 15 } },
+        { "exercise": "muscle-up", "block": "skill", "prescription": { "sets": 4, "reps": 3, "rest_s": 120 }, "notes": "Crisp reps only." },
+        { "exercise": "handstand-push-up", "block": "skill", "prescription": { "sets": 3, "reps": 5, "reps_max": 8, "rest_s": 120 } },
+        { "exercise": "bench-press", "block": "strength", "prescription": { "sets": 4, "reps": 6, "reps_max": 8, "pct_tm": 72, "rest_s": 150 }, "notes": "Volume day, about 70–75% of training max." },
+        { "exercise": "wrist-prep", "block": "skill", "prescription": { "minutes": 5 } },
+        { "exercise": "planche-lean", "block": "skill", "prescription": { "sets": 3, "seconds": 20, "seconds_max": 30, "rest_s": 90 }, "min_week": 7 },
+        { "exercise": "pike-pulse", "block": "accessory", "prescription": { "sets": 3, "reps": 10, "rest_s": 60 } },
+        { "exercise": "tuck-l-sit", "block": "accessory", "prescription": { "sets": 3, "seconds": 15, "rest_s": 60 } },
+        { "exercise": "face-pull", "block": "accessory", "prescription": { "sets": 2, "reps": 12, "rest_s": 60 } },
+        { "exercise": "suitcase-carry", "block": "accessory", "prescription": { "sets": 3, "distance_m": 30, "per_side": true, "rest_s": 60 } },
+        { "exercise": "lateral-raise", "block": "accessory", "prescription": { "sets": 3, "reps": 15, "rest_s": 60 } },
+        { "exercise": "hammer-curl", "block": "accessory", "prescription": { "sets": 3, "reps": 10, "rest_s": 60 } },
+        { "exercise": "triceps-pushdown", "block": "accessory", "prescription": { "sets": 3, "reps": 12, "rest_s": 60 } },
+        { "exercise": "external-rotation", "block": "accessory", "prescription": { "sets": 2, "reps": 15, "rest_s": 45 } },
+        { "exercise": "wrist-curl", "block": "accessory", "prescription": { "sets": 2, "reps": 15, "rest_s": 45 } },
+        { "exercise": "reverse-curl", "block": "accessory", "prescription": { "sets": 2, "reps": 15, "rest_s": 45 } },
+        { "exercise": "front-split-pnf", "block": "mobility", "prescription": { "minutes": 8 } },
+        { "exercise": "mobility-a", "block": "mobility", "prescription": { "minutes": 12 } }
+      ]
+    },
+    {
+      "weekday": 6,
+      "name": "Hard: reactive jumps, backflip and intervals",
+      "day_type": "hard",
+      "mobility": "A: hips and hamstrings",
+      "items": [
+        { "exercise": "free-movement", "block": "warmup", "prescription": { "minutes": 3 } },
+        { "exercise": "jump-rope", "block": "warmup", "prescription": { "minutes": 2, "minutes_max": 3 } },
+        { "exercise": "band-walks", "block": "warmup", "prescription": { "sets": 2, "reps": 15, "per_side": true } },
+        { "exercise": "handstand-practice", "block": "skill", "prescription": { "minutes": 10 } },
+        { "exercise": "reactive-jumps", "block": "power", "prescription": { "contacts": 15, "contacts_max": 20, "rest_s": 60 } },
+        { "exercise": "backflip-progression", "block": "skill", "prescription": { "minutes": 15 } },
+        { "exercise": "interval-400", "block": "conditioning", "prescription": { "sets": 5, "sets_max": 6, "distance_m": 400, "target_seconds": 90, "rest_s": 150 }, "notes": "Mile week. Add reps first, then shorten rest.", "week_parity": "odd" },
+        { "exercise": "interval-1k", "block": "conditioning", "prescription": { "sets": 4, "sets_max": 5, "distance_m": 1000, "target_seconds": 285, "rest_s": 120 }, "notes": "5K week. Add reps first, then shorten rest.", "week_parity": "even" },
+        { "exercise": "atg-split-squat", "block": "accessory", "prescription": { "sets": 3, "reps": 6, "reps_max": 8, "per_side": true, "rest_s": 90 } },
+        { "exercise": "foot-work", "block": "accessory", "prescription": { "minutes": 10 } },
+        { "exercise": "front-split-pnf", "block": "mobility", "prescription": { "minutes": 8 } },
+        { "exercise": "mobility-a", "block": "mobility", "prescription": { "minutes": 12 } }
+      ]
+    },
+    {
+      "weekday": 7,
+      "name": "Easy: aerobic, arms and flexibility",
+      "day_type": "easy",
+      "mobility": "Long holds, in session",
+      "items": [
+        { "exercise": "zone2-run", "block": "conditioning", "prescription": { "minutes": 45, "minutes_max": 60 } },
+        { "exercise": "handstand-push-up", "block": "skill", "prescription": { "sets": 3, "reps": 5, "reps_max": 8, "rest_s": 120 } },
+        { "exercise": "lateral-raise", "block": "accessory", "prescription": { "sets": 3, "reps": 15, "rest_s": 60 } },
+        { "exercise": "db-curl", "block": "accessory", "prescription": { "sets": 3, "reps": 15, "rest_s": 60 } },
+        { "exercise": "overhead-triceps-extension", "block": "accessory", "prescription": { "sets": 3, "reps": 15, "rest_s": 60 } },
+        { "exercise": "neck-work", "block": "accessory", "prescription": { "sets": 2, "reps": 15, "rest_s": 45 } },
+        { "exercise": "long-holds", "block": "mobility", "prescription": { "minutes": 30 } }
+      ]
+    }
+  ],
+
+  "feats": [
+    {
+      "slug": "squat-315", "name": "315 squat", "area": "lifting", "stage": "now",
+      "target": "315 lb back squat", "rough_time": "Needs current max",
+      "notes": "Milestones every 20 lb from your current max.",
+      "steps": [{ "description": "315 lb back squat", "target": { "load_lb": 315, "reps": 1 }, "goal": true }]
+    },
+    {
+      "slug": "bench-315", "name": "315 bench", "area": "lifting", "stage": "now",
+      "target": "315 lb bench press", "rough_time": "Needs current max",
+      "notes": "Milestones every 20 lb from your current max.",
+      "steps": [{ "description": "315 lb bench press", "target": { "load_lb": 315, "reps": 1 }, "goal": true }]
+    },
+    {
+      "slug": "deadlift-405", "name": "405 deadlift", "area": "lifting", "stage": "now",
+      "target": "405 lb deadlift", "rough_time": "Needs current max",
+      "notes": "Milestones every 20 lb from your current max.",
+      "steps": [{ "description": "405 lb deadlift", "target": { "load_lb": 405, "reps": 1 }, "goal": true }]
+    },
+    {
+      "slug": "one-hand-dunk", "name": "One-hand dunk", "area": "jumping", "stage": "now",
+      "target": "One-hand dunk", "rough_time": "6–12 months",
+      "steps": [
+        { "description": "Grab the rim" },
+        { "description": "Dunk a tennis ball" },
+        { "description": "Dunk a volleyball" },
+        { "description": "Dunk a size-6 ball" },
+        { "description": "One-hand dunk", "goal": true }
+      ]
+    },
+    {
+      "slug": "two-hand-dunk", "name": "Two-hand dunk", "area": "jumping", "stage": "next",
+      "target": "Two-hand dunk", "unlock": "One-hand dunk is repeatable", "rough_time": "12–24 months",
+      "notes": "Needs a few more inches of clearance than the one-hand dunk.",
+      "steps": [{ "description": "Two-hand dunk", "goal": true }]
+    },
+    {
+      "slug": "mile-sub-6", "name": "Sub-6:00 mile", "area": "running", "stage": "now",
+      "target": "Mile under 6:00", "rough_time": "6–12 months",
+      "steps": [
+        { "description": "6:45 mile", "target": { "max_seconds": 405 } },
+        { "description": "6:30 mile", "target": { "max_seconds": 390 } },
+        { "description": "6:15 mile", "target": { "max_seconds": 375 } },
+        { "description": "Sub-6:00 mile", "target": { "max_seconds": 359 }, "goal": true }
+      ]
+    },
+    {
+      "slug": "5k-sub-24", "name": "Sub-24:00 5K", "area": "running", "stage": "now",
+      "target": "5K under 24:00", "rough_time": "6–12 months",
+      "steps": [
+        { "description": "25:30 5K", "target": { "max_seconds": 1530 } },
+        { "description": "24:45 5K", "target": { "max_seconds": 1485 } },
+        { "description": "Sub-24:00 5K", "target": { "max_seconds": 1439 }, "goal": true }
+      ]
+    },
+    {
+      "slug": "backflip", "name": "Backflip", "area": "calisthenics", "stage": "now",
+      "target": "Unspotted backflip", "rough_time": "2–6 months with coaching",
+      "notes": "Learn at an open gym or class with mats and a coach; no first attempts on hard ground.",
+      "steps": [
+        { "description": "Back roll, then back extension roll" },
+        { "description": "Standing tuck jumps, knees to chest, 3 x 5", "target": { "sets": 3, "reps": 5 } },
+        { "description": "Spotted backflip onto a raised mat or trampoline" },
+        { "description": "Spotted backflip on a floor mat" },
+        { "description": "Unspotted backflip", "goal": true }
+      ]
+    },
+    {
+      "slug": "front-lever", "name": "Front lever", "area": "calisthenics", "stage": "now",
+      "target": "Full front lever, 5 s", "rough_time": "1–2 years",
+      "steps": [
+        { "description": "Tuck front lever, 15 s", "target": { "seconds": 15 } },
+        { "description": "Advanced tuck with a flat back, 10 s", "target": { "seconds": 10 } },
+        { "description": "One leg out or straddle, 8 s", "target": { "seconds": 8 } },
+        { "description": "Full front lever, 5 s", "target": { "seconds": 5 }, "goal": true }
+      ]
+    },
+    {
+      "slug": "one-arm-pull-up", "name": "One-arm pull-up", "area": "calisthenics", "stage": "next",
+      "target": "Full one-arm pull-up", "unlock": "Weighted pull-up at +25% bodyweight for 5 reps", "rough_time": "1–3 years",
+      "notes": "Weighted pull-ups build it now; specific work unlocks at step 1.",
+      "steps": [
+        { "description": "Weighted pull-up at +25% bodyweight, 5 reps", "target": { "added_bodyweight_pct": 25, "reps": 5 } },
+        { "description": "Archer pull-ups, 5 per side", "target": { "reps": 5, "per_side": true } },
+        { "description": "One-arm negatives, 5 s lowering, 3 per side", "target": { "reps": 3, "seconds": 5, "per_side": true } },
+        { "description": "Towel-assisted one-arm pull-ups" },
+        { "description": "Full one-arm pull-up", "goal": true }
+      ]
+    },
+    {
+      "slug": "press-handstand", "name": "Press to handstand", "area": "calisthenics", "stage": "next",
+      "target": "Straddle press from the floor", "unlock": "Freestanding handstand 30 s plus pancake forearms down", "rough_time": "2–3 years",
+      "notes": "Handstand practice every session builds steps 1–2 now.",
+      "steps": [
+        { "description": "Chest-to-wall handstand hold, 60 s", "target": { "seconds": 60 } },
+        { "description": "Freestanding handstand, 30 s", "target": { "seconds": 30 } },
+        { "description": "Tuck L-sit, then full L-sit, 15 s each", "target": { "seconds": 15 } },
+        { "description": "Straddle press negatives, 3 x 3", "target": { "sets": 3, "reps": 3 } },
+        { "description": "Straddle press with feet starting on a box" },
+        { "description": "Straddle press from the floor", "goal": true }
+      ]
+    },
+    {
+      "slug": "straddle-planche", "name": "Straddle planche", "area": "calisthenics", "stage": "next",
+      "target": "Straddle planche, 5 s", "unlock": "Planche leans start in week 7", "rough_time": "3–5 years",
+      "notes": "Warm up wrists first.",
+      "steps": [
+        { "description": "Planche lean, 30 s", "target": { "seconds": 30 } },
+        { "description": "Tuck planche, 10 s", "target": { "seconds": 10 } },
+        { "description": "Advanced tuck planche, 10 s", "target": { "seconds": 10 } },
+        { "description": "Straddle planche, 5 s", "target": { "seconds": 5 }, "goal": true }
+      ]
+    },
+    {
+      "slug": "handstand-push-up", "name": "Wall handstand push-up", "area": "calisthenics", "stage": "now",
+      "target": "Full-range wall handstand push-ups, 3 x 5",
+      "notes": "Your overhead press, trained Friday and Sunday.",
+      "steps": [
+        { "description": "Pike push-ups, 3 x 8–10", "target": { "sets": 3, "reps": 8 } },
+        { "description": "Feet-elevated pike push-ups, 3 x 8", "target": { "sets": 3, "reps": 8 } },
+        { "description": "Wall handstand push-ups to a pad, 3 x 5", "target": { "sets": 3, "reps": 5 } },
+        { "description": "Full-range wall handstand push-ups, 3 x 5", "target": { "sets": 3, "reps": 5 }, "goal": true },
+        { "description": "Deficit wall handstand push-ups on parallettes, then freestanding", "bonus": true }
+      ]
+    },
+    {
+      "slug": "front-splits", "name": "Front splits, both sides", "area": "mobility", "stage": "now",
+      "target": "Flat front split on both sides", "rough_time": "6–12 months",
+      "notes": "Hands on blocks, hips square. Track with a side-view photo at test weeks.",
+      "steps": [
+        { "description": "Hip-to-floor gap under 6 in", "target": { "max_gap_in": 6 } },
+        { "description": "Gap under 2 in", "target": { "max_gap_in": 2 } },
+        { "description": "Flat on both sides", "goal": true },
+        { "description": "Hands off the blocks", "bonus": true }
+      ]
+    },
+    {
+      "slug": "pancake", "name": "Pancake", "area": "mobility", "stage": "now",
+      "target": "Chest to the floor", "rough_time": "6–18 months",
+      "notes": "Same leg width each time; side-view photo at test weeks.",
+      "steps": [
+        { "description": "Upright with a flat back (on a block if needed)" },
+        { "description": "Hands walked forward, flat back" },
+        { "description": "Forearms to the floor" },
+        { "description": "Chin down" },
+        { "description": "Chest to the floor", "goal": true }
+      ]
+    },
+    {
+      "slug": "full-bridge", "name": "Full bridge", "area": "mobility", "stage": "now",
+      "target": "Shoulders stacked over the wrists", "rough_time": "6–12 months",
+      "steps": [
+        { "description": "Bridge with bent arms, crown of the head lightly touching" },
+        { "description": "Arms straight" },
+        { "description": "Shoulders stacked over the wrists", "goal": true },
+        { "description": "Legs straight", "bonus": true }
+      ]
+    },
+    {
+      "slug": "middle-split", "name": "Middle split", "area": "mobility", "stage": "background",
+      "target": "Flat middle split", "rough_time": "1–3 years; hip structure may cap it",
+      "notes": "Never force it.",
+      "steps": [
+        { "description": "Rocking frog held comfortably for 90 s", "target": { "seconds": 90 } },
+        { "description": "Hip-to-floor gap under 12 in", "target": { "max_gap_in": 12 } },
+        { "description": "Gap under 6 in", "target": { "max_gap_in": 6 } },
+        { "description": "Flat", "goal": true }
+      ]
+    }
+  ]
+}
