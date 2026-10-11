@@ -22,6 +22,17 @@ export interface PastSession {
 /** RPE values offered when logging (10 = nothing left, 9 = one more rep, 8 = two, ...). */
 export const RPE_OPTIONS = [6, 7, 7.5, 8, 8.5, 9, 9.5, 10]
 
+/** How training maxes move, in words, for the Plan screen. Keep in step with trainingMaxUpdate. */
+export const TRAINING_MAX_RULE = [
+  'After every heavy session, the top single sets the next training max:',
+  'RPE 7 or easier: +5 lb bench, +10 lb squat and deadlift.',
+  'RPE 7.5–8.5: half that.',
+  'RPE 9–9.5: hold.',
+  'RPE 10 or a missed rep: down half a step.',
+  'Hit but no RPE logged: half a step up.',
+  'Deload weeks never change it. The new max starts the next day.',
+]
+
 /** Upper-body lifts move in smaller steps than squat and deadlift. */
 export function tmStep(slug: string): number {
   return /bench|press|row|pull/.test(slug) ? 5 : 10
