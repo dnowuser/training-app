@@ -10,6 +10,8 @@ export interface PlannedSet {
   setNumber: number
   isWarmup: boolean
   perSide: boolean
+  /** Percent of training max, for ladder steps and pct_tm sets. */
+  pct?: number
   reps?: number
   repsMax?: number
   loadLb?: number
@@ -37,6 +39,7 @@ export function plannedSets(p: Prescription, trainingMax?: number): PlannedSet[]
       setNumber: i + 1,
       isWarmup: s.isWarmup,
       perSide,
+      pct: s.pct,
       reps: s.reps,
       loadLb: load(s.pct),
     }))
@@ -53,6 +56,7 @@ export function plannedSets(p: Prescription, trainingMax?: number): PlannedSet[]
     setNumber: i + 1,
     isWarmup: false,
     perSide,
+    pct: p.pct_tm,
     reps: p.reps,
     repsMax: p.reps_max,
     loadLb,

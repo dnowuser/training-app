@@ -26,8 +26,13 @@ React 19 + TypeScript + Vite, React Router (data router in `src/main.tsx`), Tail
 
 ```
 src/main.tsx              router and screen list
-src/components/           Layout (bottom tab bar), shared UI
-src/routes/screens.tsx    screens (placeholders until each phase builds them)
+src/components/           Layout (auth gate, bottom tab bar), SignIn, RestTimer, shared UI
+src/routes/Today.tsx      Today screen: today's session, one-tap set logging, finish
+src/routes/screens.tsx    other screens (placeholders until each phase builds them)
+src/lib/api.ts            Supabase queries the screens use (loadDay, insertSet, ...)
+src/lib/logging.ts        what a tap logs per measure, hit_target, set labels, rest after a set
+src/lib/auth.ts           useAuthSession
+src/lib/restTimer.ts      rest timer context (provider in components/RestTimer.tsx)
 src/lib/supabase.ts       client; null until .env.local is filled in
 src/lib/types.ts          row types + the Prescription jsonb shape
 src/lib/prescription.ts   ladder loads from training max, set expansion, one-line summaries
@@ -96,6 +101,6 @@ These apply to every Claude, whether in a coding session or in chat through the 
 
 ## Status
 
-- Done: schema, generator functions, seed data for the current program, app shell with placeholder screens, tests.
-- Next (phase 1): create the Supabase project and connect it to claude.ai, run the migration and seed, record training maxes, start Cycle 1. Then build sign-in, the Today screen with set logging and rest timer, the Calendar and Day detail, and offline queueing of sets. Deploy to Vercel.
+- Done: schema, generator functions, seed data for the current program, app shell, tests. Phase 1 so far: email and password sign-in (no sign-ups), Today screen (ladder loads from the training max, one-tap set logging with edit/undo, skip, finish), rest timer.
+- Next (phase 1): create the Supabase project and connect it to claude.ai, run the migration and seed, record training maxes, start Cycle 1. Then the Calendar and Day detail, and offline queueing of sets. Deploy to Vercel.
 - Open decisions are listed at the end of docs/app-plan.md.

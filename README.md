@@ -10,7 +10,7 @@ A personal training app: open it and today's workout is lined up, log what you h
 
 1. **Create a Supabase project** at [supabase.com](https://supabase.com).
 2. **Run the schema.** In the SQL editor, run each file in `supabase/migrations/` in order. (Or with the Supabase CLI: `supabase link` then `supabase db push`.)
-3. **Create your account.** Until the app's sign-in screen exists, add yourself under Authentication → Users. Then turn off new sign-ups so nobody else can create an account.
+3. **Create your account.** Under Authentication → Users, add yourself with an email and password (tick Auto Confirm User); that's what you sign in to the app with. Then under Authentication → Sign In / Providers, turn off new sign-ups so nobody else can create an account.
 4. **Load the program.** In the SQL editor, run `supabase/seed.sql`. It attaches everything to your account and refuses to run twice.
 5. **Record training maxes** in pounds. Replace the three placeholders and the date:
    ```sql
