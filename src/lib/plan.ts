@@ -100,6 +100,11 @@ export async function loadActiveCycle(db: SupabaseClient): Promise<Cycle | null>
   return rows[0] ?? null
 }
 
+export async function updateCycleNotes(db: SupabaseClient, cycle: Cycle, notes: string): Promise<void> {
+  check(await db.from('cycles').update({ notes: notes || null }).eq('id', cycle.id))
+  await logChange(db, { summary: `${cycle.name} notes updated`, details: { before: cycle.notes, after: notes || null } })
+}
+
 export async function generateSessions(db: SupabaseClient, from: string, to: string): Promise<number> {
   return check<number>(await db.rpc('generate_sessions', { p_from: from, p_to: to }))
 }

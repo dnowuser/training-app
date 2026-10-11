@@ -16,6 +16,7 @@ import {
   loadTemplate,
   startCycle,
   updateExerciseCues,
+  updateCycleNotes,
   updateItem,
   updateSlot,
   WEEKDAYS,
@@ -23,6 +24,7 @@ import {
   type PlanSlot,
 } from '../lib/plan'
 import { describePrescription } from '../lib/prescription'
+import { TRAINING_MAX_RULE } from '../lib/progression'
 import { supabase } from '../lib/supabase'
 import type { Area, Block, Change, Cycle, DayType, Exercise, Measure } from '../lib/types'
 
@@ -573,7 +575,7 @@ function CycleTab() {
             {week && cycle.deload_weeks.includes(week) ? ' · deload week' : ''}
           </p>
           <p className="text-sm text-neutral-500">Deload weeks: {cycle.deload_weeks.join(', ')}</p>
-          {cycle.notes && <p className="mt-2 rounded-lg bg-neutral-100 p-2 text-sm dark:bg-neutral-800">{cycle.notes}</p>}
+          <CycleNotes cycle={cycle} onSaved={() => setVersion((v) => v + 1)} onError={setError} />
           <p className="mt-2 text-sm">Planned through {until ? formatDay(until) : '—'}.</p>
           {until && end && until < end && (
             <button type="button" onClick={() => void generateMore()} className="mt-3 h-12 w-full rounded-xl bg-neutral-900 font-semibold text-white dark:bg-white dark:text-neutral-900">
@@ -610,6 +612,66 @@ function CycleTab() {
           </button>
         </div>
       </details>
+    </div>
+  )
+}
+
+function CycleNotes({ cycle, onSaved, onError }: { cycle: Cycle; onSaved: () => void; onError: (m: string) => void }) {
+  const [editing, setEditing] = useState(false)
+  const [text, setText] = useState(cycle.notes ?? '')
+
+  async function save() {
+    try {
+      await updateCycleNotes(supabase!, cycle, text.trim())
+      setEditing(false)
+      onSaved()
+    } catch (e) {
+      onError(e instanceof Error ? e.message : String(e))
+    }
+  }
+
+  return (
+    <div className="mt-3 space-y-2 text-sm">
+      <div className="rounded-lg bg-neutral-100 p-3 dark:bg-neutral-800">
+        <p className="font-medium">How training maxes move</p>
+        <ul className="mt-1 list-disc space-y-0.5 pl-5">
+          {TRAINING_MAX_RULE.map((line) => (
+            <li key={line}>{line}</li>
+          ))}
+        </ul>
+      </div>
+      {editing ? (
+        <div className="space-y-2">
+          <textarea
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            rows={3}
+            className="w-full rounded-lg border border-neutral-300 bg-white p-3 dark:border-neutral-700 dark:bg-neutral-900"
+          />
+          <div className="flex gap-2">
+            <button type="button" onClick={() => setEditing(false)} className="h-11 flex-1 rounded-xl bg-neutral-100 dark:bg-neutral-800">
+              Cancel
+            </button>
+            <button type="button" onClick={() => void save()} className="h-11 flex-1 rounded-xl bg-emerald-600 font-semibold text-white">
+              Save notes
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div>
+          {cycle.notes && <p className="text-neutral-600 dark:text-neutral-300">{cycle.notes}</p>}
+          <button
+            type="button"
+            onClick={() => {
+              setText(cycle.notes ?? '')
+              setEditing(true)
+            }}
+            className="text-sm underline"
+          >
+            {cycle.notes ? 'Edit notes' : 'Add notes'}
+          </button>
+        </div>
+      )}
     </div>
   )
 }
