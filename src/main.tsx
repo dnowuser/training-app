@@ -35,7 +35,17 @@ const router = createBrowserRouter([
 ])
 
 // Offline app shell (production only, so dev always serves fresh code).
+// When a new version takes over an already-open page, reload once so the page
+// and its files come from the same version.
 if (import.meta.env.PROD && 'serviceWorker' in navigator) {
+  const hadController = Boolean(navigator.serviceWorker.controller)
+  let reloaded = false
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (hadController && !reloaded) {
+      reloaded = true
+      window.location.reload()
+    }
+  })
   window.addEventListener('load', () => void navigator.serviceWorker.register('/sw.js'))
 }
 
