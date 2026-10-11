@@ -51,6 +51,8 @@ export interface Exercise {
   area: Area
   measure: Measure
   cues: string | null
+  /** Feat whose ladder this exercise practises; the card shows its current step. */
+  feat_id: string | null
 }
 
 export interface Cycle {
@@ -155,6 +157,8 @@ export interface FeatStep {
   is_goal: boolean
   is_bonus: boolean
   achieved_on: string | null
+  /** How to do this step in a session. */
+  how: string | null
 }
 
 export interface Milestone {

@@ -15,6 +15,7 @@ import {
   type Day,
   type DayExercise,
   type DaySession,
+  type Ladder,
   type NewSet,
 } from '../lib/api'
 import {
@@ -28,9 +29,12 @@ import {
   MEASURE_FIELDS,
   needsInput,
   restAfter,
+  withLadderStep,
   type SetField,
   type SetValues,
 } from '../lib/logging'
+import { localISODate } from '../lib/dates'
+import { markStep } from '../lib/feats'
 import { describePrescription, plannedSets, type PlannedSet } from '../lib/prescription'
 import { useRestTimer } from '../lib/restTimer'
 import { dequeue, enqueue, isNetworkError, pendingSet, QUEUE_EVENT, queuedAsLogged, readQueue } from '../lib/offline'
@@ -54,6 +58,12 @@ interface Row {
   setNumber: number
   planned?: PlannedSet
   logged?: LoggedSet
+}
+
+/** The day's prescription for an exercise, following its ladder step when the step sets sets and reps. */
+function prescriptionFor(item: DayExercise, ladders: Day['ladders']): DayExercise['prescription'] {
+  const ladder = item.exercise.feat_id ? ladders[item.exercise.feat_id] : undefined
+  return withLadderStep(item.prescription, ladder?.steps.find((s) => !s.achieved_on))
 }
 
 function rowsFor(item: DayExercise, sets: LoggedSet[], tm: number | undefined): Row[] {
@@ -252,7 +262,11 @@ function SessionView({
   const timer = useRestTimer()
   const [editing, setEditing] = useState<string | null>(null)
   const [editingItem, setEditingItem] = useState<DayExercise | null>(null)
-  const items = day.exercises.filter((e) => e.session_id === session.id)
+  // The stored prescription stays as planned; the card follows the current ladder step.
+  const items = day.exercises
+    .filter((e) => e.session_id === session.id)
+    .map((e) => ({ ...e, prescription: prescriptionFor(e, day.ladders) }))
+  const stored = new Map(day.exercises.map((e) => [e.id, e]))
   const setsFor = (id: string) => day.sets.filter((s) => s.session_exercise_id === id)
 
   const report = (e: unknown) => onError(e instanceof Error ? e.message : String(e))
@@ -368,7 +382,8 @@ function SessionView({
     }
   }
 
-  async function editItem(item: DayExercise, prescription: DayExercise['prescription'], notes: string, reason: string) {
+  async function editItem(shown: DayExercise, prescription: DayExercise['prescription'], notes: string, reason: string) {
+    const item = stored.get(shown.id) ?? shown
     if (JSON.stringify(prescription) === JSON.stringify(item.prescription) && (notes || null) === item.notes) {
       setEditingItem(null)
       return
@@ -473,6 +488,8 @@ function SessionView({
               onDelete={(set) => void remove(set)}
               onSkip={() => void toggleSkip(item)}
               onEdit={() => setEditingItem(item)}
+              ladder={item.exercise.feat_id ? day.ladders[item.exercise.feat_id] : undefined}
+              onAdvanced={reload}
             />
             {editingItem?.id === item.id && (
               <div className="mb-3 rounded-2xl border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900">
@@ -480,7 +497,7 @@ function SessionView({
                   Change {item.exercise.name} for this day only. To change it every week, use Plan.
                 </p>
                 <PrescriptionForm
-                  initial={item.prescription}
+                  initial={stored.get(item.id)?.prescription ?? item.prescription}
                   initialNotes={item.notes ?? ''}
                   askReason
                   onCancel={() => setEditingItem(null)}
@@ -532,6 +549,8 @@ function ExerciseCard({
   onDelete,
   onSkip,
   onEdit,
+  ladder,
+  onAdvanced,
 }: {
   item: DayExercise
   rows: Row[]
@@ -544,6 +563,8 @@ function ExerciseCard({
   onDelete: (set: LoggedSet) => void
   onSkip: () => void
   onEdit: () => void
+  ladder?: Ladder
+  onAdvanced: () => void
 }) {
   const p = item.prescription
   const measure = item.exercise.measure
@@ -587,12 +608,8 @@ function ExerciseCard({
         </div>
       </header>
       {item.notes && <p className="mt-1 text-sm">{item.notes}</p>}
-      {item.exercise.cues && (
-        <details className="mt-1 text-sm text-neutral-500">
-          <summary className="cursor-pointer">Cues</summary>
-          <p className="mt-1">{item.exercise.cues}</p>
-        </details>
-      )}
+      {item.exercise.cues && <p className="mt-2 text-sm text-neutral-600 dark:text-neutral-300">{item.exercise.cues}</p>}
+      {ladder && <LadderStep ladder={ladder} onAdvanced={onAdvanced} />}
 
       {!item.skipped && (
         <ul className="mt-3 space-y-2">
@@ -681,6 +698,58 @@ function lastValues(rows: Row[]): SetValues {
   return planned
     ? { reps: planned.reps, load_lb: planned.loadLb, seconds: planned.seconds, distance_m: planned.distanceM, contacts: planned.contacts }
     : {}
+}
+
+/**
+ * The step of the feat ladder this exercise practises (the first not yet hit),
+ * how to do it, and a button to move up once it's earned.
+ */
+function LadderStep({ ladder, onAdvanced }: { ladder: Ladder; onAdvanced: () => void }) {
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const main = ladder.steps.filter((s) => !s.is_bonus)
+  const current = ladder.steps.find((s) => !s.achieved_on)
+  if (!current) return <p className="mt-3 rounded-xl bg-emerald-500/10 p-3 text-sm">Every step of {ladder.name} is done.</p>
+  const next = ladder.steps.find((s) => s.step_number > current.step_number)
+
+  async function advance() {
+    if (!current) return
+    const msg = `Mark "${current.description}" as hit today?${next ? ` Your next step becomes "${next.description}".` : ''}`
+    if (!window.confirm(msg)) return
+    setBusy(true)
+    try {
+      await markStep(supabase!, ladder, current, localISODate(), '')
+      onAdvanced()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    }
+    setBusy(false)
+  }
+
+  return (
+    <div className="mt-3 rounded-xl border border-violet-500/40 bg-violet-500/5 p-3">
+      <p className="text-xs font-semibold tracking-wide text-violet-700 uppercase dark:text-violet-300">
+        Your step {current.is_bonus ? '(bonus)' : `${current.step_number} of ${main.length}`}
+      </p>
+      <p className="mt-0.5 font-semibold">{current.description}</p>
+      {current.how && <p className="mt-1 text-sm">{current.how}</p>}
+      {next && <p className="mt-1 text-xs text-neutral-500">Next: {next.description}</p>}
+      {error && <p className="mt-1 text-sm text-red-600">{error}</p>}
+      <div className="mt-2 flex items-center justify-between gap-2">
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => void advance()}
+          className="h-10 rounded-lg bg-violet-600 px-3 text-sm font-semibold text-white disabled:opacity-50"
+        >
+          {busy ? 'Saving…' : 'I hit this step'}
+        </button>
+        <Link to={`/feats/${ladder.slug}`} className="text-xs text-neutral-500 underline">
+          Whole ladder
+        </Link>
+      </div>
+    </div>
+  )
 }
 
 function SetRow({

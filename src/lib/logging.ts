@@ -1,5 +1,5 @@
 import { formatDuration, type PlannedSet } from './prescription'
-import type { LoggedSet, Measure, Prescription } from './types'
+import type { FeatStep, LoggedSet, Measure, Prescription } from './types'
 
 /** The numbers you can log for a set. Which ones the app asks for depends on the exercise's measure. */
 export interface SetValues {
@@ -135,4 +135,19 @@ export function latestTrainingMaxes(rows: { exercise_id: string | null; value: n
 export function restAfter(p: Prescription, planned: PlannedSet | undefined): number {
   if (!p.rest_s || p.contacts !== undefined) return 0
   return planned?.isWarmup ? Math.min(p.rest_s, 90) : p.rest_s
+}
+
+/**
+ * When the current ladder step sets its own sets and reps (e.g. "Pike push-ups,
+ * 3 x 8"), the session follows the step rather than the template's generic range.
+ * Steps that only give a goal (a 15 s hold to move up) leave the prescription alone.
+ */
+export function withLadderStep(p: Prescription, step: Pick<FeatStep, 'target'> | undefined): Prescription {
+  const t = step?.target as { sets?: number; reps?: number } | undefined
+  if (!t || typeof t.sets !== 'number' || typeof t.reps !== 'number' || p.scheme === 'ladder') return p
+  const sets = p.deload ? Math.ceil(t.sets / 2) : t.sets
+  const out: Prescription = { ...p, sets, reps: t.reps }
+  delete out.sets_max
+  delete out.reps_max
+  return out
 }

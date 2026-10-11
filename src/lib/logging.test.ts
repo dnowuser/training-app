@@ -8,6 +8,7 @@ import {
   latestTrainingMaxes,
   needsInput,
   restAfter,
+  withLadderStep,
 } from './logging'
 import { plannedSets } from './prescription'
 
@@ -110,5 +111,19 @@ describe('helpers', () => {
     expect(restAfter(p, ladder[0])).toBe(90)
     expect(restAfter(p, ladder[1])).toBe(180)
     expect(restAfter({ contacts: 8, rest_s: 90 }, undefined)).toBe(0)
+  })
+})
+
+describe('withLadderStep', () => {
+  const card = { sets: 3, reps: 5, reps_max: 8, rest_s: 120 }
+
+  it('uses the step\'s sets and reps when it has them', () => {
+    expect(withLadderStep(card, { target: { sets: 3, reps: 10 } })).toEqual({ sets: 3, reps: 10, rest_s: 120 })
+    expect(withLadderStep({ ...card, deload: true }, { target: { sets: 3, reps: 10 } }).sets).toBe(2)
+  })
+
+  it('leaves goal-only steps and missing steps alone', () => {
+    expect(withLadderStep(card, { target: { seconds: 15 } })).toBe(card)
+    expect(withLadderStep(card, undefined)).toBe(card)
   })
 })

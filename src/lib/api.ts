@@ -1,9 +1,17 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { latestTrainingMaxes, type SetValues } from './logging'
-import type { Exercise, LoggedSet, Session, SessionExercise } from './types'
+import type { Exercise, FeatStep, LoggedSet, Session, SessionExercise } from './types'
 
 export type DaySession = Session & { slot: { mobility: string | null } | null }
 export type DayExercise = SessionExercise & { exercise: Exercise }
+
+/** A feat ladder an exercise practises, with its steps in order. */
+export interface Ladder {
+  id: string
+  name: string
+  slug: string
+  steps: FeatStep[]
+}
 
 export interface Day {
   /** Generated session first, then any extras added by hand. */
@@ -12,6 +20,8 @@ export interface Day {
   sets: LoggedSet[]
   /** Latest training max on or before the date, by exercise id. */
   trainingMaxes: Map<string, number>
+  /** Ladders for the day's skill exercises, by feat id. */
+  ladders: Record<string, Ladder>
 }
 
 function check<T>({ data, error }: { data: T | null; error: { message: string } | null }): T {
@@ -29,7 +39,7 @@ export async function loadDay(db: SupabaseClient, date: string): Promise<Day> {
       .order('slot_id', { ascending: true, nullsFirst: false })
       .order('created_at'),
   )
-  if (sessions.length === 0) return { sessions, exercises: [], sets: [], trainingMaxes: new Map() }
+  if (sessions.length === 0) return { sessions, exercises: [], sets: [], trainingMaxes: new Map(), ladders: {} }
 
   const exercises = check<DayExercise[]>(
     await db
@@ -42,8 +52,9 @@ export async function loadDay(db: SupabaseClient, date: string): Promise<Day> {
       .order('position'),
   )
   const exerciseIds = [...new Set(exercises.map((e) => e.exercise_id))]
+  const featIds = [...new Set(exercises.flatMap((e) => (e.exercise.feat_id ? [e.exercise.feat_id] : [])))]
 
-  const [sets, maxes] = await Promise.all([
+  const [sets, maxes, feats] = await Promise.all([
     exercises.length
       ? db
           .from('sets')
@@ -65,13 +76,17 @@ export async function loadDay(db: SupabaseClient, date: string): Promise<Day> {
           .order('measured_on', { ascending: false })
           .order('created_at', { ascending: false })
       : { data: [], error: null },
+    featIds.length ? db.from('feats').select('id, name, slug, steps:feat_steps(*)').in('id', featIds) : { data: [], error: null },
   ])
+  const ladders: Record<string, Ladder> = {}
+  for (const f of check<Ladder[]>(feats)) ladders[f.id] = { ...f, steps: [...f.steps].sort((a, b) => a.step_number - b.step_number) }
 
   return {
     sessions,
     exercises,
     sets: check<LoggedSet[]>(sets),
     trainingMaxes: latestTrainingMaxes(check<{ exercise_id: string | null; value: number }[]>(maxes)),
+    ladders,
   }
 }
 
@@ -141,7 +156,7 @@ export function cachedDay(date: string): Day | null {
     const raw = localStorage.getItem(`day:${date}`)
     if (!raw) return null
     const parsed = JSON.parse(raw) as Omit<Day, 'trainingMaxes'> & { trainingMaxes: [string, number][] }
-    return { ...parsed, trainingMaxes: new Map(parsed.trainingMaxes) }
+    return { ...parsed, ladders: parsed.ladders ?? {}, trainingMaxes: new Map(parsed.trainingMaxes) }
   } catch {
     return null
   }
