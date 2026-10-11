@@ -1,7 +1,14 @@
 // Keeps the app shell available without signal. Pages load network-first and
 // fall back to the cached copy; hashed build assets are cached as they're used.
 // Supabase requests (another origin) are never touched.
-const CACHE = 'training-shell-v1'
+//
+// Only real assets are cached: never an error, and never an HTML page standing
+// in for a missing file (that once left the app unstyled). Bump CACHE to throw
+// away everything cached by an earlier version.
+const CACHE = 'training-shell-v2'
+
+const cacheable = (res, wantHtml) =>
+  res.ok && res.type === 'basic' && (res.headers.get('content-type') || '').includes('text/html') === wantHtml
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE).then((c) => c.addAll(['/', '/manifest.webmanifest', '/favicon.svg'])))
@@ -26,8 +33,10 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(
       fetch(req)
         .then((res) => {
-          const copy = res.clone()
-          caches.open(CACHE).then((c) => c.put('/', copy))
+          if (cacheable(res, true)) {
+            const copy = res.clone()
+            caches.open(CACHE).then((c) => c.put('/', copy))
+          }
           return res
         })
         .catch(() => caches.match('/')),
@@ -41,8 +50,10 @@ self.addEventListener('fetch', (event) => {
         (hit) =>
           hit ||
           fetch(req).then((res) => {
-            const copy = res.clone()
-            caches.open(CACHE).then((c) => c.put(req, copy))
+            if (cacheable(res, false)) {
+              const copy = res.clone()
+              caches.open(CACHE).then((c) => c.put(req, copy))
+            }
             return res
           }),
       ),
