@@ -34,7 +34,7 @@ export function currentStep(steps: FeatStep[]): FeatStep | undefined {
  */
 export async function markStep(
   db: SupabaseClient,
-  feat: Feat,
+  feat: Pick<Feat, 'id' | 'name'>,
   step: FeatStep,
   date: string,
   note: string,

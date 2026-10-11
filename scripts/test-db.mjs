@@ -182,6 +182,17 @@ await test('a moved session stays moved and its old date is not regenerated', as
   assert.equal(after.n, before.n)
 })
 
+await test('an exercise can point at the feat ladder it practises', async () => {
+  await db.query(`update exercises set feat_id = (select id from feats where slug = 'handstand-push-up') where slug = 'handstand-push-up'`)
+  await db.query(`update feat_steps set how = 'Hands shoulder width, hips high.' where step_number = 1 and feat_id = (select id from feats where slug = 'handstand-push-up')`)
+  const step = await one(`
+    select fs.description, fs.how from exercises e
+    join feat_steps fs on fs.feat_id = e.feat_id and fs.achieved_on is null
+    where e.slug = 'handstand-push-up' order by fs.step_number limit 1`)
+  assert.equal(step.description, 'Pike push-ups, 3 x 8–10')
+  assert.equal(step.how, 'Hands shoulder width, hips high.')
+})
+
 await test('views report sets and feat progress', async () => {
   const logged = await one(`select count(*)::int as n from session_log where set_id is not null`)
   assert.equal(logged.n, 1)

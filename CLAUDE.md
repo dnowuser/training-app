@@ -51,7 +51,7 @@ Every table has `user_id` (defaults to `public.current_owner()`) and a row-level
 
 | Table | One row is |
 | --- | --- |
-| exercises | A movement in the library: `slug`, `area`, `measure` (which fields to log), `cues` |
+| exercises | A movement in the library: `slug`, `area`, `measure` (which fields to log), `cues` (full how-to; the Today screen shows it), optional `feat_id` (the ladder it practises) |
 | cycles | A training cycle: `start_date`, `weeks` (12), `deload_weeks` ({6,12}), `status` |
 | template_slots | One weekday of the weekly plan (ISO weekday, 1 = Monday): name, `day_type`, mobility label |
 | template_items | One exercise in a template day: `position`, `block`, `prescription`, optional `min_week`/`max_week`/`week_parity` |
@@ -59,7 +59,7 @@ Every table has `user_id` (defaults to `public.current_owner()`) and a row-level
 | session_exercises | One exercise in a session, with its own copy of the prescription |
 | sets | One logged set: reps, `load_lb`, seconds, `distance_m`, contacts, optional rpe, `hit_target`, note |
 | feats | A feat: `stage` (now, next, background, achieved), target, unlock condition |
-| feat_steps | Ladder steps for a feat; `is_goal` marks the feat itself, `achieved_on` when hit |
+| feat_steps | Ladder steps for a feat; `is_goal` marks the feat itself, `achieved_on` when hit, `how` (how to do the step). An exercise with `feat_id` shows the first unachieved step and follows its `target.sets`/`target.reps` |
 | milestones | Anything hit worth recording: a ladder step, a PR, a time trial. Links to feat, step, session, set |
 | media | A photo or video in the `media` bucket at `<user_id>/<file>`, tagged to session, exercise, feat or milestone |
 | metrics | A measurement: `training_max` (with `exercise_id`), `bodyweight`, `touch_height`, `mile_time`, `5k_time` |
@@ -91,6 +91,10 @@ These apply to every Claude, whether in a coding session or in chat through the 
 4. Ask before deleting anything.
 5. Dates are local (America/New_York). Pass explicit dates to functions; don't rely on `current_date`, which is UTC on the server.
 6. Weights in pounds, distances in meters, times in seconds.
+
+## Writing for the Today screen
+
+Wayson should never have to leave the Today screen to know what to do. Every exercise's `cues` says how to do it (setup, form, what to log) in plain words, and every ladder step's `how` says how to do that step and when to move up. Don't write "current ladder step" or similar without the app showing the step: link the exercise with `feat_id` instead.
 
 ## Working on the code
 
