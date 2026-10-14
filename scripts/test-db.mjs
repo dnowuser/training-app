@@ -203,6 +203,25 @@ await test('views report sets and feat progress', async () => {
   assert.equal(fl.current_step, 2)
 })
 
+await test('deleted and changed rows are kept in the trash', async () => {
+  const before = await one(`select count(*)::int as n from trash`)
+  const set = await one(`select id, seconds from sets limit 1`)
+  await db.query(`update sets set seconds = 200 where id = $1`, [set.id])
+  await db.query(`delete from sets where id = $1`, [set.id])
+  const kept = await all(`select op, old_row from trash where table_name = 'sets' order by id`)
+  assert.deepEqual(kept.map((r) => r.op), ['UPDATE', 'DELETE'])
+  assert.equal(Number(kept[0].old_row.seconds), Number(set.seconds), 'the update keeps the old value')
+  assert.equal(Number(kept[1].old_row.seconds), 200, 'the delete keeps the last value')
+  // Put it back so later checks see the same data.
+  await db.query(`insert into sets select * from jsonb_populate_record(null::sets, $1)`, [kept[0].old_row])
+  // Regenerating untouched planned days adds nothing to the trash.
+  const mid = await one(`select count(*)::int as n from trash`)
+  await db.query(`select regenerate_sessions('2026-12-01', '2026-12-14')`)
+  const after = await one(`select count(*)::int as n from trash`)
+  assert.equal(after.n, mid.n)
+  assert.equal(mid.n, before.n + 2)
+})
+
 await test('row-level security: the owner sees their rows, another account sees none', async () => {
   const countAs = async (userId) => {
     await db.exec(`set role authenticated; select set_config('request.jwt.claim.sub', '${userId}', false);`)

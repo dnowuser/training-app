@@ -64,6 +64,9 @@ Every table has `user_id` (defaults to `public.current_owner()`) and a row-level
 | media | A photo or video in the `media` bucket at `<user_id>/<file>`, tagged to session, exercise, feat or milestone |
 | metrics | A measurement: `training_max` (with `exercise_id`), `bodyweight`, `touch_height`, `mile_time`, `5k_time` |
 | changes | The change log: who (`user`, `claude`, `app`), summary, reason, `affects_from`, details |
+| trash | A deleted row, or the old version of a changed row, kept for undo (written by a trigger; read-only) |
+
+Safety net: a trigger copies every deleted row, and the old version of every changed row, into `trash` (`table_name`, `op`, `old_row`), except planned untouched sessions that regeneration rebuilds. Restore with `insert into <table> select * from jsonb_populate_record(null::<table>, old_row)`. Never delete from `trash`. More → Your data downloads a full JSON backup or a CSV of every logged set.
 
 Views: `session_log` (one row per logged set, or per planned exercise with no sets) and `feat_progress` (each feat with its current step).
 
