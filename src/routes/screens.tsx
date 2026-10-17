@@ -7,6 +7,7 @@ import { supabase } from '../lib/supabase'
 export function MoreScreen() {
   const links = [
     { to: '/review', label: 'Week review', hint: 'Plan vs what you hit, and a summary for Claude' },
+    { to: '/exercises', label: 'Exercise library', hint: 'What each exercise works, the feats it builds, how to do it' },
     { to: '/plan', label: 'Plan', hint: 'Weekly template, cycle and change log' },
     { to: '/media', label: 'Media', hint: 'Photo and video timeline, side-by-side compare' },
     { to: '/search', label: 'Search', hint: 'Logs, notes, feats, milestones and dates' },

@@ -30,6 +30,8 @@ import {
   isTimedBlock,
   MEASURE_FIELDS,
   needsInput,
+  pacePerMile,
+  timeFromPace,
   restAfter,
   withLadderStep,
   type SetField,
@@ -37,7 +39,8 @@ import {
 } from '../lib/logging'
 import { addDays, localISODate } from '../lib/dates'
 import { markStep } from '../lib/feats'
-import { describePrescription, plannedSets, type PlannedSet } from '../lib/prescription'
+import { describePrescription, formatDuration, plannedSets, type PlannedSet } from '../lib/prescription'
+import { parseTime } from '../lib/progress'
 import {
   describeLastTime,
   nextLoad,
@@ -52,7 +55,7 @@ import { dequeue, enqueue, isNetworkError, pendingSet, QUEUE_EVENT, queuedAsLogg
 import { supabase } from '../lib/supabase'
 import { PrescriptionForm } from './PrescriptionForm'
 import { SessionOptions } from './SessionOptions'
-import type { Block, LoggedSet } from '../lib/types'
+import type { Block, FeatRef, LoggedSet } from '../lib/types'
 
 const BLOCK_LABELS: Record<Block, string> = {
   warmup: 'Warm-up',
@@ -91,6 +94,16 @@ function rowsFor(item: DayExercise, sets: LoggedSet[], tm: number | undefined): 
 /** A timed block (e.g. 10 min handstand practice) is one row you mark done. */
 function timedSet(): PlannedSet {
   return { setNumber: 1, isWarmup: false, perSide: false }
+}
+
+/** Feats a session's exercises build toward, most-trained first. */
+function featsFor(items: DayExercise[], links: Record<string, FeatRef[]>): FeatRef[] {
+  const count = new Map<string, { feat: FeatRef; n: number }>()
+  for (const i of items) {
+    if (i.skipped) continue
+    for (const f of links[i.exercise_id] ?? []) count.set(f.id, { feat: f, n: (count.get(f.id)?.n ?? 0) + 1 })
+  }
+  return [...count.values()].sort((a, b) => b.n - a.n).map((c) => c.feat)
 }
 
 /** Timestamps for started_at, completed_at and pending sets. */
@@ -292,6 +305,8 @@ function SessionView({
   )
   const next = allRows.find(({ r }) => r.planned && !r.logged)
   const nextKey = next && rowKey(next.item.id, next.r.setNumber)
+  // The exercise whose set is open for editing: the first one with sets left that isn't a timed block.
+  const focusId = allRows.find(({ item, r }) => r.planned && !r.logged && !isTimedBlock(item.prescription))?.item.id
   const plannedCount = allRows.filter(({ r }) => r.planned).length
   const doneCount = allRows.filter(({ r }) => r.planned && r.logged).length
 
@@ -511,6 +526,15 @@ function SessionView({
         {finished && <Badge tone="emerald">{session.status === 'done' ? 'Done' : 'Partial'}</Badge>}
       </div>
       {session.notes && <p className="mt-2 text-sm text-neutral-600 dark:text-neutral-300">{session.notes}</p>}
+      {(() => {
+        const today = featsFor(items, day.exerciseFeats)
+        return today.length > 0 ? (
+          <p className="mt-2 text-sm">
+            <span className="text-neutral-500">Builds today: </span>
+            {today.map((f) => f.name).join(', ')}
+          </p>
+        ) : null
+      })()}
 
       {plannedCount > 0 && (
         <div className="mt-4">
@@ -546,12 +570,14 @@ function SessionView({
               rows={rowsFor(item, setsFor(item.id), day.trainingMaxes.get(item.exercise_id))}
               tm={day.trainingMaxes.get(item.exercise_id)}
               nextKey={nextKey}
+              focused={item.id === focusId}
               editing={editing}
               setEditing={setEditing}
               onLog={(row, values) => void log(item, row, values)}
               onSave={(row, values, note, rpe) => void save(item, row, values, note, rpe)}
               onRpe={(set, rpe) => void setRpe(set, rpe)}
               history={day.history[item.exercise.slug] ?? []}
+              feats={day.exerciseFeats[item.exercise_id] ?? []}
               onDelete={(set) => void remove(set)}
               onSkip={() => void toggleSkip(item)}
               onEdit={() => setEditingItem(item)}
@@ -620,6 +646,7 @@ function ExerciseCard({
   rows,
   tm,
   nextKey,
+  focused,
   editing,
   setEditing,
   onLog,
@@ -631,17 +658,20 @@ function ExerciseCard({
   onAdvanced,
   onRpe,
   history,
+  feats,
 }: {
   item: DayExercise
   rows: Row[]
   tm: number | undefined
   nextKey: string | undefined
+  focused: boolean
   editing: string | null
   setEditing: (key: string | null) => void
   onLog: (row: Row, values: SetValues) => void
   onSave: (row: Row, values: SetValues, note: string, rpe: number | null) => void
   onRpe: (set: LoggedSet, rpe: number) => void
   history: PastSession[]
+  feats: FeatRef[]
   onDelete: (set: LoggedSet) => void
   onSkip: () => void
   onEdit: () => void
@@ -659,6 +689,16 @@ function ExerciseCard({
   const allLogged = rows.every((r) => r.logged)
   const warmups = rows.filter((r) => r.planned?.isWarmup).length
   const extraKey = rowKey(item.id, Math.max(0, ...rows.map((r) => r.setNumber)) + 1)
+  // The set that's open for editing on this card: the session's next set if it's here,
+  // or the next one on an exercise you've already started (so working out of order still works).
+  const firstOpen = rows.find((r) => r.planned && !r.logged)
+  const started = rows.some((r) => r.logged)
+  const activeKey =
+    timed || !firstOpen
+      ? undefined
+      : focused || nextKey?.startsWith(`${item.id}:`) || started
+        ? rowKey(item.id, firstOpen.setNumber)
+        : undefined
 
   // Load to carry into a set the plan gives no load for: the last one logged before it.
   const carryLoad = (setNumber: number) =>
@@ -694,7 +734,30 @@ function ExerciseCard({
         </div>
       </header>
       {item.notes && <p className="mt-1 text-sm">{item.notes}</p>}
+      {(item.exercise.muscles?.length > 0 || feats.length > 0) && (
+        <p className="mt-2 text-xs leading-relaxed">
+          {item.exercise.muscles?.length > 0 && (
+            <span className="text-neutral-500">Works {item.exercise.muscles.join(', ')}</span>
+          )}
+          {feats.length > 0 && (
+            <span className="block">
+              <span className="text-neutral-500">Builds </span>
+              {feats.map((f, i) => (
+                <span key={f.id}>
+                  {i > 0 && ', '}
+                  <Link to={`/feats/${f.slug}`} className="text-violet-700 underline dark:text-violet-300">
+                    {f.name}
+                  </Link>
+                </span>
+              ))}
+            </span>
+          )}
+        </p>
+      )}
       {item.exercise.cues && <p className="mt-2 text-sm text-neutral-600 dark:text-neutral-300">{item.exercise.cues}</p>}
+      <Link to={`/exercises/${item.exercise.slug}`} className="mt-1 inline-block text-xs text-neutral-500 underline">
+        More about {item.exercise.name.toLowerCase()}
+      </Link>
       {last && (
         <p className="mt-2 text-sm">
           <span className="text-neutral-500">Last time ({formatShort(last.date)}):</span> {describeLastTime(last)}
@@ -714,7 +777,23 @@ function ExerciseCard({
               : {}
             return (
               <li key={key}>
-                {editing === key ? (
+                {/* The set you're on is open on the card: change weight, reps or RPE and log it in one tap. */}
+                {editing !== key && key === activeKey ? (
+                  <SetEditor
+                    key={`${key}:${defaults.load_lb ?? ''}`}
+                    measure={measure}
+                    initial={defaults}
+                    initialNote=""
+                    initialRpe={null}
+                    asksRpe={asksRpe && !row.planned?.isWarmup}
+                    active={{
+                      number: row.planned?.isWarmup ? `W${row.setNumber}` : String(row.setNumber - warmups),
+                      target: row.planned ? describeTarget(row.planned) : '',
+                      isNext: key === nextKey,
+                    }}
+                    onSave={(values, note, rpe) => onSave(row, values, note, rpe)}
+                  />
+                ) : editing === key ? (
                   <SetEditor
                     measure={measure}
                     initial={row.logged ? loggedValues(row.logged) : defaults}
@@ -954,6 +1033,22 @@ function RpeChips({ value, onPick }: { value: number | null; onPick: (rpe: numbe
   )
 }
 
+/** Times for runs and timed blocks are typed as m:ss; holds stay in plain seconds. */
+const usesClock = (measure: DayExercise['exercise']['measure'], f: SetField) =>
+  f === 'seconds' && (measure === 'distance' || measure === 'duration')
+
+const DISTANCE_PICKS = [
+  { label: '400 m', m: 400 },
+  { label: '1 km', m: 1000 },
+  { label: '1 mi', m: 1609 },
+  { label: '5 km', m: 5000 },
+]
+
+/**
+ * Weight, reps, time or distance with big −/+ buttons, RPE and a note.
+ * `active` makes it the current set, open on the card: one green button logs it.
+ * Otherwise it edits a set you tapped, with Cancel (and Delete for a logged set).
+ */
 function SetEditor({
   measure,
   initial,
@@ -963,6 +1058,7 @@ function SetEditor({
   onSave,
   onCancel,
   onDelete,
+  active,
 }: {
   measure: DayExercise['exercise']['measure']
   initial: SetValues
@@ -970,32 +1066,60 @@ function SetEditor({
   initialRpe: number | null
   asksRpe: boolean
   onSave: (values: SetValues, note: string, rpe: number | null) => void
-  onCancel: () => void
+  onCancel?: () => void
   onDelete?: () => void
+  active?: { number: string; target: string; isNext: boolean }
 }) {
   const fields = MEASURE_FIELDS[measure]
+  const show = (f: SetField, v: number | undefined) =>
+    v === undefined ? '' : usesClock(measure, f) && v >= 60 ? formatDuration(v) : String(v)
+  const read = (f: SetField, t: string): number | undefined => {
+    if (t.trim() === '') return undefined
+    const n = usesClock(measure, f) ? parseTime(t) : Number(t)
+    return n !== null && Number.isFinite(n) ? n : undefined
+  }
   const [text, setText] = useState<Record<SetField, string>>(() => {
     const out = {} as Record<SetField, string>
-    for (const f of fields) out[f] = initial[f] !== undefined ? String(initial[f]) : ''
+    for (const f of fields) out[f] = show(f, initial[f])
     return out
   })
   const [note, setNote] = useState(initialNote)
+  const [showNote, setShowNote] = useState(!active || Boolean(initialNote))
   const [rpe, setRpe] = useState<number | null>(initialRpe === null ? null : Number(initialRpe))
+  const [paceText, setPaceText] = useState('')
 
   const bump = (f: SetField, by: number) =>
-    setText((t) => ({ ...t, [f]: String(Math.max(0, (Number(t[f]) || 0) + by)) }))
+    setText((t) => ({ ...t, [f]: show(f, Math.max(0, (read(f, t[f]) ?? 0) + by)) }))
+
+  const distance = read('distance_m', text.distance_m ?? '')
+  const seconds = read('seconds', text.seconds ?? '')
+  const pace = measure === 'distance' && distance && seconds ? pacePerMile(distance, seconds) : null
+
+  function setPace(t: string) {
+    setPaceText(t)
+    const p = parseTime(t)
+    if (p && distance) setText((x) => ({ ...x, seconds: show('seconds', timeFromPace(distance, p)) }))
+  }
 
   function submit() {
     const values: SetValues = {}
     for (const f of fields) {
-      const n = Number(text[f])
-      if (text[f].trim() !== '' && Number.isFinite(n)) values[f] = n
+      const v = read(f, text[f])
+      if (v !== undefined) values[f] = v
     }
     onSave(values, note.trim(), rpe)
   }
 
   return (
-    <div className="rounded-xl bg-neutral-100 p-3 dark:bg-neutral-800/60">
+    <div
+      className={`rounded-xl p-3 ${active ? `bg-emerald-500/10 ${active.isNext ? 'ring-2 ring-emerald-500' : ''}` : 'bg-neutral-100 dark:bg-neutral-800/60'}`}
+    >
+      {active && (
+        <p className="mb-2 text-sm">
+          <span className="font-semibold">Set {active.number}</span>
+          <span className="text-neutral-500"> · target {active.target}</span>
+        </p>
+      )}
       {fields.map((f) => (
         <div key={f} className="mb-2 flex items-center gap-2">
           <button
@@ -1007,13 +1131,14 @@ function SetEditor({
             −
           </button>
           <input
-            inputMode="decimal"
+            inputMode={usesClock(measure, f) ? 'text' : 'decimal'}
             value={text[f]}
+            placeholder={usesClock(measure, f) ? 'm:ss' : ''}
             onChange={(e) => setText((t) => ({ ...t, [f]: e.target.value }))}
-            aria-label={FIELD_LABELS[f]}
+            aria-label={usesClock(measure, f) ? 'time' : FIELD_LABELS[f]}
             className="h-12 min-w-0 flex-1 rounded-xl border border-neutral-300 bg-white text-center text-xl font-semibold tabular-nums dark:border-neutral-700 dark:bg-neutral-900"
           />
-          <span className="w-16 shrink-0 text-sm text-neutral-500">{FIELD_LABELS[f]}</span>
+          <span className="w-16 shrink-0 text-sm text-neutral-500">{usesClock(measure, f) ? 'time' : FIELD_LABELS[f]}</span>
           <button
             type="button"
             onClick={() => bump(f, FIELD_STEP[f])}
@@ -1024,29 +1149,65 @@ function SetEditor({
           </button>
         </div>
       ))}
+      {measure === 'distance' && (
+        <div className="mb-2 space-y-2">
+          <div className="flex gap-1">
+            {DISTANCE_PICKS.map((d) => (
+              <button
+                key={d.label}
+                type="button"
+                onClick={() => setText((t) => ({ ...t, distance_m: String(d.m) }))}
+                className="h-9 flex-1 rounded-lg border border-neutral-300 bg-white text-sm dark:border-neutral-700 dark:bg-neutral-900"
+              >
+                {d.label}
+              </button>
+            ))}
+          </div>
+          <div className="flex items-center gap-2 text-sm">
+            <span className="text-neutral-500">Pace</span>
+            <input
+              value={paceText}
+              onChange={(e) => setPace(e.target.value)}
+              placeholder={pace ? formatDuration(pace) : 'm:ss'}
+              aria-label="Pace per mile"
+              className="h-10 w-24 rounded-lg border border-neutral-300 bg-white text-center tabular-nums dark:border-neutral-700 dark:bg-neutral-900"
+            />
+            <span className="text-neutral-500">/mi</span>
+            {pace && <span className="ml-auto font-medium tabular-nums">{formatDuration(pace)}/mi · {formatDuration(pace / 1.609344)}/km</span>}
+          </div>
+        </div>
+      )}
       {asksRpe && (
         <div className="mb-2">
           <p className="text-xs text-neutral-500">RPE (10 = nothing left, 9 = 1 more rep, 8 = 2 more)</p>
           <RpeChips value={rpe} onPick={(r) => setRpe(rpe === r ? null : r)} />
         </div>
       )}
-      <input
-        value={note}
-        onChange={(e) => setNote(e.target.value)}
-        placeholder="Note (optional)"
-        className="mb-3 h-11 w-full rounded-xl border border-neutral-300 bg-white px-3 dark:border-neutral-700 dark:bg-neutral-900"
-      />
+      {showNote ? (
+        <input
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          placeholder="Note (optional)"
+          className="mb-3 h-11 w-full rounded-xl border border-neutral-300 bg-white px-3 dark:border-neutral-700 dark:bg-neutral-900"
+        />
+      ) : (
+        <button type="button" onClick={() => setShowNote(true)} className="mb-2 text-sm text-neutral-500 underline">
+          + Note
+        </button>
+      )}
       <div className="flex gap-2">
         {onDelete && (
           <button type="button" onClick={onDelete} className="h-12 rounded-xl px-3 text-sm text-red-600">
             Delete
           </button>
         )}
-        <button type="button" onClick={onCancel} className="h-12 flex-1 rounded-xl bg-white font-medium dark:bg-neutral-900">
-          Cancel
-        </button>
-        <button type="button" onClick={submit} className="h-12 flex-1 rounded-xl bg-emerald-600 font-semibold text-white">
-          Save
+        {onCancel && (
+          <button type="button" onClick={onCancel} className="h-12 flex-1 rounded-xl bg-white font-medium dark:bg-neutral-900">
+            Cancel
+          </button>
+        )}
+        <button type="button" onClick={submit} className="h-12 flex-[2] rounded-xl bg-emerald-600 text-lg font-semibold text-white">
+          {active ? '✓ Log set' : 'Save'}
         </button>
       </div>
     </div>

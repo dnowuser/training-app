@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { plannedCount, summarize, type CalendarSessionRow } from './calendar'
+import { featsOf, plannedCount, summarize, type CalendarSessionRow } from './calendar'
 
 const row = (patch: Partial<CalendarSessionRow>): CalendarSessionRow => ({
   id: 's',
@@ -30,5 +30,19 @@ describe('calendar', () => {
     const started = row({ session_exercises: [{ prescription: { sets: 3 }, skipped: false, sets: [{ count: 2 }] }] })
     expect(summarize(started, '2026-10-12')).toMatchObject({ state: 'in_progress', logged: 2, planned: 3 })
     expect(summarize(started, '2026-10-14').state).toBe('partial')
+  })
+})
+
+describe('featsOf', () => {
+  it('lists the feats a day builds, most-trained first, ignoring skipped work', () => {
+    const bench = { id: 'b', slug: 'bench-315', name: '315 bench' }
+    const dunk = { id: 'd', slug: 'one-hand-dunk', name: 'One-hand dunk' }
+    const links = { e1: [bench], e2: [bench, dunk], e3: [dunk] }
+    const items = [
+      { exercise_id: 'e1', prescription: {}, skipped: false, sets: [] },
+      { exercise_id: 'e2', prescription: {}, skipped: false, sets: [] },
+      { exercise_id: 'e3', prescription: {}, skipped: true, sets: [] },
+    ]
+    expect(featsOf(items, links).map((f) => f.slug)).toEqual(['bench-315', 'one-hand-dunk'])
   })
 })

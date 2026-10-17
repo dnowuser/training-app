@@ -7,7 +7,7 @@ describe('weekSummary', () => {
       start: '2026-10-12',
       end: '2026-10-18',
       days: [
-        { id: '1', date: '2026-10-12', name: 'Hard: jumps and squat', dayType: 'hard', isDeload: false, week: 1, state: 'done', planned: 30, logged: 30 },
+        { id: '1', date: '2026-10-12', name: 'Hard: jumps and squat', dayType: 'hard', isDeload: false, week: 1, state: 'done', planned: 30, logged: 30, feats: [] },
       ],
       sets: [
         {

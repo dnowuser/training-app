@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { latestTrainingMaxes, type SetValues } from './logging'
 import { groupHistory, type PastSession, type PastSet } from './progression'
-import type { Exercise, FeatStep, LoggedSet, Session, SessionExercise } from './types'
+import type { Exercise, FeatRef, FeatStep, LoggedSet, Session, SessionExercise } from './types'
 
 export type DaySession = Session & { slot: { mobility: string | null } | null }
 export type DayExercise = SessionExercise & { exercise: Exercise }
@@ -25,9 +25,12 @@ export interface Day {
   ladders: Record<string, Ladder>
   /** Earlier sessions of each of the day's exercises (before this date), newest first, by slug. */
   history: Record<string, PastSession[]>
+  /** Feats each of the day's exercises builds toward, by exercise id. */
+  exerciseFeats: Record<string, FeatRef[]>
 }
 
-function check<T>({ data, error }: { data: T | null; error: { message: string } | null }): T {
+/** The data of a Supabase response, or throw its error. T is the row shape we asked for. */
+function check<T>({ data, error }: { data: unknown; error: { message: string } | null }): T {
   if (error) throw new Error(error.message)
   return data as T
 }
@@ -42,7 +45,7 @@ export async function loadDay(db: SupabaseClient, date: string): Promise<Day> {
       .order('slot_id', { ascending: true, nullsFirst: false })
       .order('created_at'),
   )
-  if (sessions.length === 0) return { sessions, exercises: [], sets: [], trainingMaxes: new Map(), ladders: {}, history: {} }
+  if (sessions.length === 0) return { sessions, exercises: [], sets: [], trainingMaxes: new Map(), ladders: {}, history: {}, exerciseFeats: {} }
 
   const exercises = check<DayExercise[]>(
     await db
@@ -59,7 +62,7 @@ export async function loadDay(db: SupabaseClient, date: string): Promise<Day> {
 
   const slugs = [...new Set(exercises.map((e) => e.exercise.slug))]
 
-  const [sets, maxes, feats, past] = await Promise.all([
+  const [sets, maxes, feats, past, links] = await Promise.all([
     exercises.length
       ? db
           .from('sets')
@@ -92,7 +95,12 @@ export async function loadDay(db: SupabaseClient, date: string): Promise<Day> {
           .order('date', { ascending: false })
           .limit(500)
       : { data: [], error: null },
+    exerciseIds.length
+      ? db.from('exercise_feats').select('exercise_id, feat:feats(id, slug, name)').in('exercise_id', exerciseIds)
+      : { data: [], error: null },
   ])
+  const exerciseFeats: Record<string, FeatRef[]> = {}
+  for (const l of check<{ exercise_id: string; feat: FeatRef }[]>(links)) (exerciseFeats[l.exercise_id] ??= []).push(l.feat)
   const ladders: Record<string, Ladder> = {}
   for (const f of check<Ladder[]>(feats)) ladders[f.id] = { ...f, steps: [...f.steps].sort((a, b) => a.step_number - b.step_number) }
 
@@ -102,6 +110,7 @@ export async function loadDay(db: SupabaseClient, date: string): Promise<Day> {
     sets: check<LoggedSet[]>(sets),
     trainingMaxes: latestTrainingMaxes(check<{ exercise_id: string | null; value: number }[]>(maxes)),
     ladders,
+    exerciseFeats,
     history: groupHistory(
       check<(PastSet & { date: string; exercise_slug: string })[]>(past).map((r) => ({
         ...r,
@@ -215,7 +224,13 @@ export function cachedDay(date: string): Day | null {
     const raw = localStorage.getItem(`day:${date}`)
     if (!raw) return null
     const parsed = JSON.parse(raw) as Omit<Day, 'trainingMaxes'> & { trainingMaxes: [string, number][] }
-    return { ...parsed, ladders: parsed.ladders ?? {}, history: parsed.history ?? {}, trainingMaxes: new Map(parsed.trainingMaxes) }
+    return {
+      ...parsed,
+      ladders: parsed.ladders ?? {},
+      history: parsed.history ?? {},
+      exerciseFeats: parsed.exerciseFeats ?? {},
+      trainingMaxes: new Map(parsed.trainingMaxes),
+    }
   } catch {
     return null
   }

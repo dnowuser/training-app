@@ -110,15 +110,33 @@ export function describeTarget(s: PlannedSet): string {
 
 /** What was logged, e.g. "235 lb × 5", "12 s", "400 m · 1:28". */
 export function describeLogged(s: Pick<LoggedSet, 'reps' | 'load_lb' | 'seconds' | 'distance_m' | 'contacts'>): string {
+  // Numeric columns can arrive as strings ("400.0"); normalise first.
+  const n = (v: number | string | null | undefined) => (v === null || v === undefined ? null : Number(v))
+  const [load, distance, seconds] = [n(s.load_lb), n(s.distance_m), n(s.seconds)]
   const parts: string[] = []
-  if (s.contacts !== null) parts.push(`${s.contacts} contacts`)
-  if (s.load_lb !== null) parts.push(`${s.load_lb} lb`)
-  if (s.reps !== null) parts.push(s.load_lb !== null ? `× ${s.reps}` : `${s.reps} reps`)
-  if (s.distance_m !== null) parts.push(`${s.distance_m} m`)
-  if (s.seconds !== null) {
-    parts.push(s.distance_m !== null || s.seconds >= 120 ? formatDuration(s.seconds) : `${s.seconds} s`)
+  if (s.contacts != null) parts.push(`${s.contacts} contacts`)
+  if (load !== null) parts.push(`${load} lb`)
+  if (s.reps != null) parts.push(load !== null ? `× ${s.reps}` : `${s.reps} reps`)
+  if (distance !== null) parts.push(`${distance} m`)
+  if (seconds !== null) {
+    parts.push(distance !== null || seconds >= 120 ? formatDuration(seconds) : `${seconds} s`)
   }
+  const pace = distance !== null && seconds !== null ? pacePerMile(distance, seconds) : null
+  if (pace !== null && distance! >= 400) parts.push(`· ${formatDuration(pace)}/mi`)
   return parts.join(' ') || 'Done'
+}
+
+export const METERS_PER_MILE = 1609.344
+
+/** Seconds per mile for a run, or null without both distance and time. */
+export function pacePerMile(distanceM: number, seconds: number): number | null {
+  if (!(distanceM > 0) || !(seconds > 0)) return null
+  return (seconds / distanceM) * METERS_PER_MILE
+}
+
+/** Total seconds for a distance run at a pace given in seconds per mile. */
+export function timeFromPace(distanceM: number, secondsPerMile: number): number {
+  return Math.round((secondsPerMile * distanceM) / METERS_PER_MILE)
 }
 
 /** Latest training max per exercise from metrics rows sorted newest first. */
