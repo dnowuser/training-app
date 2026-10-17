@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { describeLastTime, groupHistory, nextLoad, readyToMoveUp, trainingMaxUpdate, type PastSet } from './progression'
+import { plannedSets } from './prescription'
+import { describeLastTime, groupHistory, nextLoad, readyToMoveUp, topPlannedSet, trainingMaxUpdate, type PastSet } from './progression'
 
 const set = (patch: Partial<PastSet>): PastSet => ({
   set_number: 1,
@@ -79,5 +80,29 @@ describe('ladder readiness', () => {
     const h = groupHistory(rows)
     expect(h.x.map((s) => s.date)).toEqual(['2026-10-20', '2026-10-13'])
     expect(h.x[1].sets.map((s) => s.set_number)).toEqual([1, 2])
+  })
+})
+
+describe('topPlannedSet', () => {
+  const warmups = [
+    { pct: 33, reps: 10 },
+    { pct: 56, reps: 10 },
+  ]
+
+  it('is the 96% single even when 91% singles follow it', () => {
+    const full = plannedSets(
+      {
+        scheme: 'ladder',
+        warmups,
+        steps: [79, 86, 91, 96, 91, 91].map((pct, i) => ({ pct, reps: i === 0 ? 5 : i === 1 ? 3 : 1 })),
+      },
+      215,
+    )
+    expect(topPlannedSet(full)).toMatchObject({ pct: 96, setNumber: 6, loadLb: 205 })
+  })
+
+  it('is none on the light day, so the training max stays put', () => {
+    const light = plannedSets({ scheme: 'ladder', warmups, steps: [91, 91, 91].map((pct) => ({ pct, reps: 1 })) }, 215)
+    expect(topPlannedSet(light)).toBeUndefined()
   })
 })
