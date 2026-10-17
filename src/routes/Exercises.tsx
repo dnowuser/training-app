@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router'
+import { MuscleDiagram } from '../components/MuscleDiagram'
 import { formatDay } from '../lib/dates'
 import { loadExercise, loadLibrary, videoSearchUrl, type ExerciseDetail, type LibraryExercise } from '../lib/library'
+import { exerciseLevels } from '../lib/muscles'
 import { WEEKDAYS } from '../lib/plan'
 import { describePrescription } from '../lib/prescription'
 import { describeLastTime } from '../lib/progression'
@@ -134,9 +136,11 @@ export function ExerciseScreen() {
       </p>
 
       <h2 className="mt-5 text-xs font-semibold tracking-wide text-neutral-500 uppercase">Works</h2>
+      <MuscleDiagram level={exerciseLevels(e.muscles)} label={`Muscles ${e.name} works`} className="mx-auto mt-2 w-full max-w-xs" />
       <div className="mt-1">
         <Chips items={e.muscles} />
       </div>
+      <p className="mt-1 text-xs text-neutral-500">Darker = main movers.</p>
 
       {e.feats.length > 0 && (
         <>

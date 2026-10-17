@@ -25,3 +25,16 @@ body {
     --chart-ink: #a3a3a3;
   }
 }
+
+/* Body diagram: silhouette and resting muscle shades (light and dark). */
+:root {
+  --body-fill: #e7e5e4;
+  --body-muscle: #d6d3d1;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --body-fill: #2a2a2a;
+    --body-muscle: #3a3a3a;
+  }
+}

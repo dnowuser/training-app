@@ -66,3 +66,30 @@ export function muscleWeek(rows: WeekRow[]): MuscleWeek[] {
   for (const m of map.values()) m.days = m.byDay.filter((n) => n > 0).length
   return [...map.values()].sort((a, b) => b.planned - a.planned || a.muscle.localeCompare(b.muscle))
 }
+
+/** Words used for stretches and runs, drawn as the muscles they mean. */
+export const ALIASES: Record<string, string[]> = {
+  spine: ['lower back', 'upper back'],
+  shoulders: ['front delts', 'rear delts'],
+  hips: ['glutes', 'hip flexors'],
+}
+
+/** Spread aliases onto real regions, keeping the strongest level for each. */
+export function regionLevels(level: Record<string, number>): Record<string, number> {
+  const out: Record<string, number> = {}
+  for (const [muscle, v] of Object.entries(level)) {
+    for (const m of ALIASES[muscle] ?? [muscle]) out[m] = Math.max(out[m] ?? 0, v)
+  }
+  return out
+}
+
+/** Shading for one exercise: its first two muscles are the main movers, the rest work less. */
+export function exerciseLevels(muscles: string[]): Record<string, number> {
+  return Object.fromEntries(muscles.map((m, i) => [m, i < 2 ? 1 : 0.55]))
+}
+
+/** Shading for a week: each muscle's sets relative to the most-trained one. */
+export function weekLevels(week: MuscleWeek[], by: 'planned' | 'logged'): Record<string, number> {
+  const max = Math.max(1, ...week.map((m) => m[by]))
+  return Object.fromEntries(week.filter((m) => m[by] > 0).map((m) => [m.muscle, m[by] / max]))
+}
