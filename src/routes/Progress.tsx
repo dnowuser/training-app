@@ -13,6 +13,7 @@ import {
   weeklySets,
   type ProgressData,
 } from '../lib/progress'
+import { loadWeek, muscleWeek, type MuscleWeek } from '../lib/muscles'
 import { supabase } from '../lib/supabase'
 import type { Area } from '../lib/types'
 
@@ -123,6 +124,9 @@ export function ProgressScreen() {
 
       <Heading>Bodyweight</Heading>
       <MetricCard title="Bodyweight" points={metricSeries(data.metrics, 'bodyweight')} format={(v) => `${v} lb`} empty="Record your bodyweight to see the trend." />
+
+      <Heading>Muscles by day</Heading>
+      <MuscleMap />
 
       <Heading>Work sets per week</Heading>
       <WeeklySets weeks={weeklySets(data.log, areaBySlug, today, 8)} />
@@ -355,6 +359,89 @@ function RecordMetric({ exercises, onSaved }: { exercises: ProgressData['exercis
           Save
         </button>
       </div>
+    </div>
+  )
+}
+
+const DAY_LETTERS = ['M', 'T', 'W', 'T', 'F', 'S', 'S']
+
+/** Planned work sets per muscle on each day of a week, so you can see how often each is trained. */
+function MuscleMap() {
+  const [monday, setMonday] = useState(() => startOfWeek(localISODate()))
+  const [rows, setRows] = useState<MuscleWeek[] | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!supabase) return
+    let cancelled = false
+    loadWeek(supabase, monday).then(
+      (w) => !cancelled && setRows(muscleWeek(w)),
+      (e: unknown) => !cancelled && setError(e instanceof Error ? e.message : String(e)),
+    )
+    return () => {
+      cancelled = true
+    }
+  }, [monday])
+
+  const max = Math.max(1, ...(rows ?? []).flatMap((r) => r.byDay))
+  return (
+    <div className="rounded-2xl border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900">
+      <div className="flex items-center justify-between">
+        <button type="button" onClick={() => setMonday(addDays(monday, -7))} className="px-2 text-xl" aria-label="Previous week">
+          ‹
+        </button>
+        <p className="text-sm">Week of {formatDay(monday)}</p>
+        <button type="button" onClick={() => setMonday(addDays(monday, 7))} className="px-2 text-xl" aria-label="Next week">
+          ›
+        </button>
+      </div>
+      <p className="mt-1 text-xs text-neutral-500">Planned work sets. Warm-ups and stretching not counted.</p>
+      {error && <p className="text-sm text-red-600">{error}</p>}
+      {rows && rows.length === 0 && <Empty>No sessions planned this week.</Empty>}
+      {rows && rows.length > 0 && (
+        <table className="mt-2 w-full table-fixed text-xs">
+          <thead>
+            <tr className="text-neutral-500">
+              <th className="w-24 text-left font-normal">Muscle</th>
+              {DAY_LETTERS.map((d, i) => (
+                <th key={i} className="font-normal">
+                  {d}
+                </th>
+              ))}
+              <th className="w-12 text-right font-normal">Sets</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.muscle}>
+                <td className="truncate py-0.5 pr-1 capitalize">{r.muscle}</td>
+                {r.byDay.map((n, i) => (
+                  <td key={i} className="p-[1px]">
+                    <span
+                      title={`${r.muscle}, ${DAY_LETTERS[i]}: ${n} sets`}
+                      className="flex h-6 items-center justify-center rounded-[4px] tabular-nums"
+                      style={(() => {
+                        // One hue, light to dark with the number of sets; the number stays readable on top.
+                        const pct = n ? Math.round(25 + 75 * (n / max)) : 0
+                        return {
+                          background: n ? `color-mix(in srgb, var(--series-1) ${pct}%, transparent)` : 'var(--chart-grid)',
+                          color: pct > 55 ? 'white' : undefined,
+                        }
+                      })()}
+                    >
+                      {n || ''}
+                    </span>
+                  </td>
+                ))}
+                <td className="text-right tabular-nums">
+                  {r.planned}
+                  <span className="block text-[10px] text-neutral-500">{r.days}×/wk</span>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
     </div>
   )
 }

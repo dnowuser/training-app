@@ -28,13 +28,13 @@ React 19 + TypeScript + Vite, React Router (data router in `src/main.tsx`), Tail
 src/main.tsx              router and screen list; registers public/sw.js (offline app shell) in production
 src/components/           Layout (auth gate, tab bar, sync banner), DayView (a day's sessions: logging, edits),
                           SessionOptions, PrescriptionForm, MediaGallery, LineChart, RestTimer, SignIn
-src/routes/               one file per screen: Today, Day, Calendar, Feats, Progress, Media, Search, Review, Plan
+src/routes/               one file per screen: Today, Day, Calendar, Feats, Progress, Media, Search, Review, Plan, Exercises
 src/lib/supabase.ts       client; null until .env.local is filled in
 src/lib/types.ts          row types + the Prescription jsonb shape
 src/lib/api.ts            day loading/caching, set logging, one-off session edits (each writes a changes row)
 src/lib/offline.ts        queue for sets logged without signal; SyncBanner sends them when back online
 src/lib/plan.ts           template edits + regenerate_sessions, cycles, change log
-src/lib/feats.ts, media.ts, progress.ts, calendar.ts, search.ts, review.ts   data for those screens
+src/lib/feats.ts, media.ts, progress.ts, calendar.ts, search.ts, review.ts, library.ts, muscles.ts   data for those screens
 src/lib/prescription.ts   ladder loads from training max, set expansion, one-line summaries
 src/lib/logging.ts        what a tap logs per measure, hit_target, set labels, rest after a set
 src/lib/dates.ts          local-date helpers (sessions are keyed by local date)
@@ -51,7 +51,8 @@ Every table has `user_id` (defaults to `public.current_owner()`) and a row-level
 
 | Table | One row is |
 | --- | --- |
-| exercises | A movement in the library: `slug`, `area`, `measure` (which fields to log), `cues` (full how-to; the Today screen shows it), optional `feat_id` (the ladder it practises) |
+| exercises | A movement in the library: `slug`, `area`, `measure` (which fields to log), `cues` (full how-to; the Today screen shows it), `muscles` (text[]: what it works, plain words), optional `feat_id` (the ladder it practises) |
+| exercise_feats | Which feats an exercise builds toward (many to many); shown on cards, the calendar and the exercise library |
 | cycles | A training cycle: `start_date`, `weeks` (12), `deload_weeks` ({6,12}), `status` |
 | template_slots | One weekday of the weekly plan (ISO weekday, 1 = Monday): name, `day_type`, mobility label |
 | template_items | One exercise in a template day: `position`, `block`, `prescription`, optional `min_week`/`max_week`/`week_parity` |
@@ -103,7 +104,8 @@ Wayson should never have to leave the Today screen to know what to do. Every exe
 
 - Schema changes: add `supabase/migrations/<timestamp>_<name>.sql`, extend `scripts/test-db.mjs` to cover it, keep `src/lib/types.ts` in sync, run `npm run check`.
 - The PGlite test stubs Supabase's `auth` and `storage` schemas; anything else Supabase-specific needs a stub there too.
-- Keep the UI mobile-first, thumb-reachable and fast to log with one hand. Big tap targets on the Today screen.
+- Keep the UI mobile-first, thumb-reachable and fast to log with one hand. Big tap targets on the Today screen. The set you're on is always open on its card (weight, reps, RPE, one ✓ Log set button); other sets log with one tap on ✓ or open with a tap on their text.
+- A new exercise needs `cues`, `muscles` and its `exercise_feats` rows, or the card, library and muscle map will have gaps.
 - Don't add a dependency when a few lines will do.
 - Don't commit `.env.local` or any key. The browser only ever gets the publishable (anon) key.
 

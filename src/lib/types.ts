@@ -53,6 +53,15 @@ export interface Exercise {
   cues: string | null
   /** Feat whose ladder this exercise practises; the card shows its current step. */
   feat_id: string | null
+  /** Muscles (or areas, for stretches) it works. */
+  muscles: string[]
+}
+
+/** A feat an exercise builds toward (exercise_feats). */
+export interface FeatRef {
+  id: string
+  slug: string
+  name: string
 }
 
 export interface Cycle {

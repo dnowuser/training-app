@@ -5,6 +5,7 @@ import './index.css'
 import { Layout } from './components/Layout'
 import { CalendarScreen } from './routes/Calendar'
 import { DayScreen } from './routes/Day'
+import { ExerciseScreen, ExercisesScreen } from './routes/Exercises'
 import { FeatDetailScreen, FeatsScreen } from './routes/Feats'
 import { MediaScreen } from './routes/Media'
 import { PlanScreen } from './routes/Plan'
@@ -23,6 +24,8 @@ const router = createBrowserRouter([
       { path: 'day/:date', element: <DayScreen /> },
       { path: 'feats', element: <FeatsScreen /> },
       { path: 'feats/:slug', element: <FeatDetailScreen /> },
+      { path: 'exercises', element: <ExercisesScreen /> },
+      { path: 'exercises/:slug', element: <ExerciseScreen /> },
       { path: 'progress', element: <ProgressScreen /> },
       { path: 'more', element: <MoreScreen /> },
       { path: 'media', element: <MediaScreen /> },

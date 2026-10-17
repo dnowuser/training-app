@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
+  pacePerMile,
+  timeFromPace,
   defaultValues,
   describeLogged,
   describeTarget,
@@ -84,7 +86,7 @@ describe('describeLogged', () => {
   it('shows what was hit', () => {
     expect(describeLogged({ ...nullSet, load_lb: 235, reps: 5 })).toBe('235 lb × 5')
     expect(describeLogged({ ...nullSet, reps: 12 })).toBe('12 reps')
-    expect(describeLogged({ ...nullSet, distance_m: 400, seconds: 88 })).toBe('400 m 1:28')
+    expect(describeLogged({ ...nullSet, distance_m: 400, seconds: 88 })).toBe('400 m 1:28 · 5:54/mi')
     expect(describeLogged({ ...nullSet, seconds: 600 })).toBe('10:00')
     expect(describeLogged(nullSet)).toBe('Done')
   })
@@ -125,5 +127,14 @@ describe('withLadderStep', () => {
   it('leaves goal-only steps and missing steps alone', () => {
     expect(withLadderStep(card, { target: { seconds: 15 } })).toBe(card)
     expect(withLadderStep(card, undefined)).toBe(card)
+  })
+})
+
+describe('pace', () => {
+  it('works out pace per mile and time from a pace', () => {
+    expect(Math.round(pacePerMile(1609.344, 450)!)).toBe(450)
+    expect(Math.round(pacePerMile(5000, 1500)!)).toBe(483)
+    expect(timeFromPace(5000, 483)).toBe(1501)
+    expect(pacePerMile(0, 100)).toBeNull()
   })
 })

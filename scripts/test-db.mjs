@@ -193,6 +193,18 @@ await test('an exercise can point at the feat ladder it practises', async () => 
   assert.equal(step.how, 'Hands shoulder width, hips high.')
 })
 
+await test('exercises list their muscles and the feats they build', async () => {
+  await db.query(`update exercises set muscles = '{chest,front delts,triceps}' where slug = 'bench-press'`)
+  await db.query(`insert into exercise_feats (exercise_id, feat_id)
+    select e.id, f.id from exercises e, feats f where e.slug = 'bench-press' and f.slug = 'bench-315'`)
+  const row = await one(`
+    select e.muscles, array_agg(f.slug) as feats from exercises e
+    join exercise_feats ef on ef.exercise_id = e.id join feats f on f.id = ef.feat_id
+    where e.slug = 'bench-press' group by e.muscles`)
+  assert.deepEqual(row.muscles, ['chest', 'front delts', 'triceps'])
+  assert.deepEqual(row.feats, ['bench-315'])
+})
+
 await test('views report sets and feat progress', async () => {
   const logged = await one(`select count(*)::int as n from session_log where set_id is not null`)
   assert.equal(logged.n, 1)

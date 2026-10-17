@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router'
-import { loadCalendar, summarize, type CalendarDay, type DayState } from '../lib/calendar'
+import { loadCalendar, loadExerciseFeats, summarize, type CalendarDay, type DayState } from '../lib/calendar'
 import { addMonths, formatDay, formatMonth, localISODate, monthGrid } from '../lib/dates'
 import { supabase } from '../lib/supabase'
 
@@ -28,16 +28,17 @@ export function CalendarScreen() {
   const grid = monthGrid(month)
   const [days, setDays] = useState<Map<string, CalendarDay[]>>(new Map())
   const [error, setError] = useState<string | null>(null)
+  const [featFilter, setFeatFilter] = useState('')
 
   useEffect(() => {
     if (!supabase) return
     let cancelled = false
     const range = monthGrid(month)
-    loadCalendar(supabase, range[0], range.at(-1)!).then(
-      (rows) => {
+    Promise.all([loadCalendar(supabase, range[0], range.at(-1)!), loadExerciseFeats(supabase)]).then(
+      ([rows, links]) => {
         if (cancelled) return
         const map = new Map<string, CalendarDay[]>()
-        for (const r of rows) map.set(r.date, [...(map.get(r.date) ?? []), summarize(r, localISODate())])
+        for (const r of rows) map.set(r.date, [...(map.get(r.date) ?? []), summarize(r, localISODate(), links)])
         setDays(map)
         setError(null)
       },
@@ -53,6 +54,10 @@ export function CalendarScreen() {
     .flat()
     .filter((d) => d.date.startsWith(month))
     .sort((a, b) => a.date.localeCompare(b.date))
+  const allFeats = [...new Map(inMonth.flatMap((d) => d.feats).map((f) => [f.slug, f])).values()].sort((a, b) =>
+    a.name.localeCompare(b.name),
+  )
+  const trains = (d: CalendarDay | undefined) => !featFilter || Boolean(d?.feats.some((f) => f.slug === featFilter))
   const done = inMonth.filter((d) => d.state === 'done' || d.state === 'partial').length
   const past = inMonth.filter((d) => d.date < today).length
 
@@ -76,6 +81,22 @@ export function CalendarScreen() {
       </div>
       {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
 
+      {allFeats.length > 0 && (
+        <select
+          value={featFilter}
+          onChange={(e) => setFeatFilter(e.target.value)}
+          aria-label="Show days that train a feat"
+          className="mt-2 h-10 w-full rounded-lg border border-neutral-300 bg-white px-2 text-sm dark:border-neutral-700 dark:bg-neutral-900"
+        >
+          <option value="">All days</option>
+          {allFeats.map((f) => (
+            <option key={f.slug} value={f.slug}>
+              Days that train {f.name}
+            </option>
+          ))}
+        </select>
+      )}
+
       <div className="mt-3 grid grid-cols-7 gap-1 text-center text-xs text-neutral-500">
         {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((d, i) => (
           <span key={i}>{d}</span>
@@ -91,7 +112,7 @@ export function CalendarScreen() {
             <Link
               key={date}
               to={`/day/${date}`}
-              className={`relative flex aspect-square flex-col items-center justify-center rounded-lg text-sm ${style ? style.cell : 'text-neutral-400'} ${outside ? 'opacity-40' : ''} ${!first && date === today ? 'ring-2 ring-emerald-500' : ''}`}
+              className={`relative flex aspect-square flex-col items-center justify-center rounded-lg text-sm ${style ? style.cell : 'text-neutral-400'} ${outside || (featFilter && !list.some(trains)) ? 'opacity-30' : ''} ${!first && date === today ? 'ring-2 ring-emerald-500' : ''}`}
             >
               <span className="font-medium">{Number(date.slice(8))}</span>
               {first && <span className={`mt-0.5 h-1 w-5 rounded-full ${DAY_TYPE_BAR[first.dayType]}`} />}
@@ -114,7 +135,7 @@ export function CalendarScreen() {
       )}
 
       <ul className="mt-4 divide-y divide-neutral-200 dark:divide-neutral-800">
-        {inMonth.map((d) => (
+        {inMonth.filter(trains).map((d) => (
           <li key={d.id}>
             <Link to={`/day/${d.date}`} className={`flex items-center gap-3 py-3 ${d.date === today ? 'font-semibold' : ''}`}>
               <span className={`h-8 w-1 shrink-0 rounded-full ${DAY_TYPE_BAR[d.dayType]}`} />
@@ -125,6 +146,15 @@ export function CalendarScreen() {
                   {d.week ? ` · week ${d.week}` : ''}
                   {d.isDeload ? ' · deload' : ''}
                 </span>
+                {d.feats.length > 0 && (
+                  <span className="block truncate text-xs text-violet-700 dark:text-violet-300">
+                    {d.feats
+                      .slice(0, 3)
+                      .map((f) => f.name)
+                      .join(', ')}
+                    {d.feats.length > 3 ? ` +${d.feats.length - 3}` : ''}
+                  </span>
+                )}
               </span>
               <span className="shrink-0 text-right text-xs">
                 <span className="block">{STATE_STYLE[d.state].label}</span>
