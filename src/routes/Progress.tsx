@@ -13,7 +13,8 @@ import {
   weeklySets,
   type ProgressData,
 } from '../lib/progress'
-import { loadWeek, muscleWeek, type MuscleWeek } from '../lib/muscles'
+import { MuscleDiagram } from '../components/MuscleDiagram'
+import { loadWeek, muscleWeek, weekLevels, type MuscleWeek } from '../lib/muscles'
 import { supabase } from '../lib/supabase'
 import type { Area } from '../lib/types'
 
@@ -125,7 +126,7 @@ export function ProgressScreen() {
       <Heading>Bodyweight</Heading>
       <MetricCard title="Bodyweight" points={metricSeries(data.metrics, 'bodyweight')} format={(v) => `${v} lb`} empty="Record your bodyweight to see the trend." />
 
-      <Heading>Muscles by day</Heading>
+      <Heading>Muscles this week</Heading>
       <MuscleMap />
 
       <Heading>Work sets per week</Heading>
@@ -370,6 +371,7 @@ function MuscleMap() {
   const [monday, setMonday] = useState(() => startOfWeek(localISODate()))
   const [rows, setRows] = useState<MuscleWeek[] | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [by, setBy] = useState<'logged' | 'planned'>('logged')
 
   useEffect(() => {
     if (!supabase) return
@@ -395,8 +397,33 @@ function MuscleMap() {
           ›
         </button>
       </div>
-      <p className="mt-1 text-xs text-neutral-500">Planned work sets. Warm-ups and stretching not counted.</p>
       {error && <p className="text-sm text-red-600">{error}</p>}
+      {rows && rows.length > 0 && (
+        <>
+          <div className="mt-2 flex gap-1 rounded-lg bg-neutral-100 p-1 text-sm dark:bg-neutral-800">
+            {(['logged', 'planned'] as const).map((k) => (
+              <button
+                key={k}
+                type="button"
+                onClick={() => setBy(k)}
+                className={`h-9 flex-1 rounded-md ${by === k ? 'bg-white font-semibold dark:bg-neutral-950' : ''}`}
+              >
+                {k === 'logged' ? 'Sets done' : 'Sets planned'}
+              </button>
+            ))}
+          </div>
+          <MuscleDiagram
+            level={weekLevels(rows, by)}
+            label={`Body map of ${by === 'logged' ? 'sets done' : 'sets planned'} this week`}
+            className="mx-auto mt-2 w-full max-w-xs"
+          >
+            <figcaption className="text-center text-xs text-neutral-500">
+              Darker = more sets {by === 'logged' ? 'done' : 'planned'}. Tap a muscle for its name.
+            </figcaption>
+          </MuscleDiagram>
+        </>
+      )}
+      <p className="mt-2 text-xs text-neutral-500">Work sets per muscle. Warm-ups and stretching not counted.</p>
       {rows && rows.length === 0 && <Empty>No sessions planned this week.</Empty>}
       {rows && rows.length > 0 && (
         <table className="mt-2 w-full table-fixed text-xs">
@@ -408,7 +435,7 @@ function MuscleMap() {
                   {d}
                 </th>
               ))}
-              <th className="w-12 text-right font-normal">Sets</th>
+              <th className="w-14 text-right font-normal">Done / plan</th>
             </tr>
           </thead>
           <tbody>
@@ -434,7 +461,8 @@ function MuscleMap() {
                   </td>
                 ))}
                 <td className="text-right tabular-nums">
-                  {r.planned}
+                  <span className={r.logged >= r.planned ? 'font-semibold text-emerald-700 dark:text-emerald-400' : ''}>{r.logged}</span>
+                  <span className="text-neutral-500"> / {r.planned}</span>
                   <span className="block text-[10px] text-neutral-500">{r.days}×/wk</span>
                 </td>
               </tr>

@@ -38,6 +38,7 @@ import {
   type SetValues,
 } from '../lib/logging'
 import { addDays, localISODate } from '../lib/dates'
+import { exerciseLevels } from '../lib/muscles'
 import { markStep } from '../lib/feats'
 import { describePrescription, formatDuration, plannedSets, type PlannedSet } from '../lib/prescription'
 import { parseTime } from '../lib/progress'
@@ -54,6 +55,7 @@ import { useRestTimer } from '../lib/restTimer'
 import { dequeue, enqueue, isNetworkError, pendingSet, QUEUE_EVENT, queuedAsLogged, readQueue } from '../lib/offline'
 import { supabase } from '../lib/supabase'
 import { PrescriptionForm } from './PrescriptionForm'
+import { MuscleDiagram } from './MuscleDiagram'
 import { SessionOptions } from './SessionOptions'
 import type { Block, FeatRef, LoggedSet } from '../lib/types'
 
@@ -679,6 +681,7 @@ function ExerciseCard({
   onAdvanced: () => void
 }) {
   const p = item.prescription
+  const [showMuscles, setShowMuscles] = useState(false)
   const last = history[0]
   const suggestion = MEASURE_FIELDS[item.exercise.measure].includes('load_lb') ? nextLoad(p, last) : null
   // RPE is asked for on work sets, not warm-ups, timed blocks or mobility.
@@ -737,7 +740,9 @@ function ExerciseCard({
       {(item.exercise.muscles?.length > 0 || feats.length > 0) && (
         <p className="mt-2 text-xs leading-relaxed">
           {item.exercise.muscles?.length > 0 && (
-            <span className="text-neutral-500">Works {item.exercise.muscles.join(', ')}</span>
+            <button type="button" onClick={() => setShowMuscles(!showMuscles)} className="text-left text-neutral-500">
+              Works {item.exercise.muscles.join(', ')} <span className="underline">{showMuscles ? 'hide' : 'see muscles'}</span>
+            </button>
           )}
           {feats.length > 0 && (
             <span className="block">
@@ -753,6 +758,9 @@ function ExerciseCard({
             </span>
           )}
         </p>
+      )}
+      {showMuscles && (
+        <MuscleDiagram level={exerciseLevels(item.exercise.muscles)} label={`Muscles ${item.exercise.name} works`} className="mx-auto mt-2 w-full max-w-[16rem]" />
       )}
       {item.exercise.cues && <p className="mt-2 text-sm text-neutral-600 dark:text-neutral-300">{item.exercise.cues}</p>}
       <Link to={`/exercises/${item.exercise.slug}`} className="mt-1 inline-block text-xs text-neutral-500 underline">
