@@ -403,7 +403,7 @@ function SessionView({
       const tm = day.trainingMaxes.get(item.exercise_id)
       if (!tm) continue
       const top = topPlannedSet(plannedSets(original.prescription, tm))
-      if (!top) continue
+      if (!top) continue // light day (no 96% single): the training max stays put
       const logged = setsFor(item.id).find((s) => s.set_number === top.setNumber && !isInFlight(s) && !isQueued(s))
       const update = trainingMaxUpdate(tm, item.exercise.slug, logged, top.reps ?? 1, session.is_deload)
       const name = item.exercise.name

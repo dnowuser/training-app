@@ -24,7 +24,7 @@ export const RPE_OPTIONS = [6, 7, 7.5, 8, 8.5, 9, 9.5, 10]
 
 /** How training maxes move, in words, for the Plan screen. Keep in step with trainingMaxUpdate. */
 export const TRAINING_MAX_RULE = [
-  'After every heavy session, the top single sets the next training max:',
+  'After every heavy session, the 96% single sets the next training max:',
   'RPE 7 or easier: +5 lb bench, +10 lb squat and deadlift.',
   'RPE 7.5–8.5: half that.',
   'RPE 9–9.5: hold.',
@@ -88,9 +88,19 @@ export function trainingMaxUpdate(
   return { from: tm, to: tm + change, reason }
 }
 
-/** The ladder's top set: the last work set (highest percentage). */
+/** Only a ladder that reaches this percentage is a heavy day that moves the training max. */
+export const HEAVY_PCT = 95
+
+/**
+ * The ladder's top set: the first work set at its highest percentage (the 96%
+ * single, even when 91% singles follow it). A light day that never reaches
+ * HEAVY_PCT (e.g. 3 singles at 91%) has none, so it leaves the training max alone.
+ */
 export function topPlannedSet(planned: PlannedSet[]): PlannedSet | undefined {
-  return planned.filter((s) => !s.isWarmup).at(-1)
+  const work = planned.filter((s) => !s.isWarmup && s.pct !== undefined)
+  const top = Math.max(...work.map((s) => s.pct!))
+  if (!work.length || top < HEAVY_PCT) return undefined
+  return work.find((s) => s.pct === top)
 }
 
 /** "25 lb × 15, 15, 14 · RPE 8" for the work sets of a past session. */
