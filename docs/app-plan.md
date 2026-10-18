@@ -101,6 +101,7 @@ All three phases' screens are built (October 2026). The gates still apply to how
 2. **Phase 2, feats, media and charts:** feat tracker with ladders, photo and video uploads, progress charts with target lines.
    - **Gate:** charts and feats match the logs. Claude reviews a full week and its edits land correctly in the app, each one in the change log.
 3. **Phase 3, search, plan editor and the Claude loop:** search, plan editor, change log view, and an optional weekly review where Claude proposes next week from what you hit.
+4. **Phase 4, more people and friends (later):** other users sign up with their own plans; friends can follow each other and see a friend's workout live while they're mid-session (sets as they're logged). Not notes, measurements or media. Needs per-user plans first; until then the app stays single-user.
 
 ## Open questions
 
