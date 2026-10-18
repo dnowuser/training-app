@@ -453,8 +453,9 @@ function SessionView({
     }
   }
 
-  async function remove(set: LoggedSet) {
-    if (!window.confirm('Delete this logged set?')) return
+  /** Delete a logged set. Unchecking skips the question; the trash keeps the row either way. */
+  async function remove(set: LoggedSet, ask = true) {
+    if (ask && !window.confirm('Delete this logged set?')) return
     if (isQueued(set)) {
       dequeue(set.id)
       setEditing(null)
@@ -581,6 +582,7 @@ function SessionView({
         history={day.history[item.exercise.slug] ?? []}
         feats={day.exerciseFeats[item.exercise_id] ?? []}
         onDelete={(set) => void remove(set)}
+        onUncheck={(set) => void remove(set, false)}
         onSkip={() => void toggleSkip(item)}
         onEdit={() => setEditingItem(item)}
         ladder={item.exercise.feat_id ? day.ladders[item.exercise.feat_id] : undefined}
@@ -771,6 +773,7 @@ function ExerciseCard({
   onLog,
   onSave,
   onDelete,
+  onUncheck,
   onSkip,
   onEdit,
   ladder,
@@ -792,6 +795,7 @@ function ExerciseCard({
   history: PastSession[]
   feats: FeatRef[]
   onDelete: (set: LoggedSet) => void
+  onUncheck: (set: LoggedSet) => void
   onSkip: () => void
   onEdit: () => void
   ladder?: Ladder
@@ -813,6 +817,8 @@ function ExerciseCard({
   // or the next one on an exercise you've already started (so working out of order still works).
   const firstOpen = rows.find((r) => r.planned && !r.logged)
   const started = rows.some((r) => r.logged)
+  // Tapping the open set's header folds it to a one-line row like the others.
+  const [folded, setFolded] = useState<string | null>(null)
   const activeKey =
     timed || !firstOpen
       ? undefined
@@ -906,7 +912,7 @@ function ExerciseCard({
             return (
               <li key={key}>
                 {/* The set you're on is open on the card: change weight, reps or RPE and log it in one tap. */}
-                {editing !== key && key === activeKey ? (
+                {editing !== key && key === activeKey && folded !== key ? (
                   <SetEditor
                     key={`${key}:${defaults.load_lb ?? ''}`}
                     measure={measure}
@@ -919,6 +925,7 @@ function ExerciseCard({
                       target: row.planned ? describeTarget(row.planned) : '',
                       isNext: key === nextKey,
                     }}
+                    onCollapse={() => setFolded(key)}
                     onSave={(values, note, rpe) => onSave(row, values, note, rpe)}
                   />
                 ) : editing === key ? (
@@ -929,8 +936,25 @@ function ExerciseCard({
                     initialRpe={row.logged?.rpe ?? null}
                     asksRpe={asksRpe && !row.planned?.isWarmup}
                     onCancel={() => setEditing(null)}
+                    onCollapse={() => setEditing(null)}
                     onSave={(values, note, rpe) => onSave(row, values, note, rpe)}
                     onDelete={row.logged && !isInFlight(row.logged) ? () => onDelete(row.logged!) : undefined}
+                  />
+                ) : !row.logged && row.planned && !timed ? (
+                  // Every other open set: weight, reps and RPE right on the row, one tap on ✓ to log.
+                  <QuickRow
+                    key={`${key}:${defaults.load_lb ?? ''}`}
+                    measure={measure}
+                    number={row.planned.isWarmup ? `W${row.setNumber}` : String(row.setNumber - warmups)}
+                    target={describeTarget(row.planned)}
+                    initial={defaults}
+                    asksRpe={asksRpe && !row.planned.isWarmup}
+                    isNext={key === nextKey}
+                    onExpand={() => {
+                      setFolded(null)
+                      setEditing(key)
+                    }}
+                    onLog={(values, rpe) => onSave(row, values, '', rpe)}
                   />
                 ) : (
                   <SetRow
@@ -940,6 +964,7 @@ function ExerciseCard({
                     isNext={key === nextKey}
                     asksRpe={asksRpe && !timed && !row.planned?.isWarmup}
                     onRpe={(rpe) => row.logged && onRpe(row.logged, rpe)}
+                    onUncheck={() => row.logged && !isInFlight(row.logged) && onUncheck(row.logged)}
                     onTap={() => (row.logged && isInFlight(row.logged) ? undefined : setEditing(key))}
                     onCheck={() =>
                       needsInput(measure, defaults) && !timed ? setEditing(key) : onLog(row, defaults)
@@ -1078,6 +1103,7 @@ function SetRow({
   onCheck,
   asksRpe,
   onRpe,
+  onUncheck,
 }: {
   row: Row
   number: string
@@ -1087,6 +1113,7 @@ function SetRow({
   onCheck: () => void
   asksRpe: boolean
   onRpe: (rpe: number) => void
+  onUncheck: () => void
 }) {
   const { planned, logged } = row
   const pending = logged && (isInFlight(logged) || isQueued(logged))
@@ -1116,12 +1143,15 @@ function SetRow({
         )}
       </button>
       {logged ? (
-        <span
-          aria-label={logged.hit_target === false ? 'Logged, missed target' : 'Logged'}
+        <button
+          type="button"
+          onClick={onUncheck}
+          disabled={Boolean(logged && isInFlight(logged))}
+          aria-label={`Uncheck: ${logged.hit_target === false ? 'logged, missed target' : 'logged'}`}
           className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-xl text-white ${pending ? 'bg-neutral-400' : logged.hit_target === false ? 'bg-amber-500' : 'bg-emerald-600'}`}
         >
           ✓
-        </span>
+        </button>
       ) : (
         <button
           type="button"
@@ -1177,6 +1207,100 @@ const DISTANCE_PICKS = [
  * `active` makes it the current set, open on the card: one green button logs it.
  * Otherwise it edits a set you tapped, with Cancel (and Delete for a logged set).
  */
+/** An open set on one line: a box per field, RPE and ✓. Tap the set number to open the full editor. */
+function QuickRow({
+  measure,
+  number,
+  target,
+  initial,
+  asksRpe,
+  isNext,
+  onExpand,
+  onLog,
+}: {
+  measure: DayExercise['exercise']['measure']
+  number: string
+  target: string
+  initial: SetValues
+  asksRpe: boolean
+  isNext: boolean
+  onExpand: () => void
+  onLog: (values: SetValues, rpe: number | null) => void
+}) {
+  const fields = MEASURE_FIELDS[measure]
+  const [text, setText] = useState<Record<SetField, string>>(() => {
+    const out = {} as Record<SetField, string>
+    for (const f of fields) out[f] = showField(measure, f, initial[f])
+    return out
+  })
+  const [rpe, setRpe] = useState('')
+  function log() {
+    const values: SetValues = {}
+    for (const f of fields) {
+      const v = readField(measure, f, text[f])
+      if (v !== undefined) values[f] = v
+    }
+    onLog(values, rpe ? Number(rpe) : null)
+  }
+  return (
+    <div className={`rounded-xl px-2 py-1.5 ${isNext ? 'bg-emerald-500/10 ring-2 ring-emerald-500' : 'bg-neutral-100 dark:bg-neutral-800/60'}`}>
+      <button type="button" onClick={onExpand} className="block w-full text-left text-xs text-neutral-500">
+        <span className="font-semibold text-neutral-700 dark:text-neutral-300">{number}</span> · target {target}
+      </button>
+      <div className="mt-1 flex items-end gap-1.5">
+        {fields.map((f) => (
+          <label key={f} className="flex min-w-0 flex-1 flex-col items-center">
+            <input
+              inputMode={usesClock(measure, f) ? 'text' : 'decimal'}
+              value={text[f]}
+              placeholder={usesClock(measure, f) ? 'm:ss' : ''}
+              onChange={(e) => setText((t) => ({ ...t, [f]: e.target.value }))}
+              aria-label={`Set ${number} ${usesClock(measure, f) ? 'time' : FIELD_LABELS[f]}`}
+              className="h-11 w-full rounded-lg border border-neutral-300 bg-white text-center text-lg font-semibold tabular-nums dark:border-neutral-700 dark:bg-neutral-900"
+            />
+            <span className="text-[10px] text-neutral-500">{usesClock(measure, f) ? 'time' : FIELD_LABELS[f]}</span>
+          </label>
+        ))}
+        {asksRpe && (
+          <label className="flex w-16 shrink-0 flex-col items-center">
+            <select
+              value={rpe}
+              onChange={(e) => setRpe(e.target.value)}
+              aria-label={`Set ${number} RPE`}
+              className="h-11 w-full rounded-lg border border-neutral-300 bg-white text-center text-base dark:border-neutral-700 dark:bg-neutral-900"
+            >
+              <option value="">–</option>
+              {RPE_OPTIONS.map((r) => (
+                <option key={r} value={r}>
+                  {r}
+                </option>
+              ))}
+            </select>
+            <span className="text-[10px] text-neutral-500">RPE</span>
+          </label>
+        )}
+        <button
+          type="button"
+          onClick={log}
+          aria-label={`Log set ${number}`}
+          className="mb-3.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-full border-2 border-emerald-600 text-xl text-emerald-600 active:bg-emerald-600 active:text-white"
+        >
+          ✓
+        </button>
+      </div>
+    </div>
+  )
+}
+
+const showField = (measure: DayExercise['exercise']['measure'], f: SetField, v: number | undefined) =>
+  v === undefined ? '' : usesClock(measure, f) && v >= 60 ? formatDuration(v) : String(v)
+
+function readField(measure: DayExercise['exercise']['measure'], f: SetField, t: string): number | undefined {
+  if (t.trim() === '') return undefined
+  const n = usesClock(measure, f) ? parseTime(t) : Number(t)
+  return n !== null && Number.isFinite(n) ? n : undefined
+}
+
 function SetEditor({
   measure,
   initial,
@@ -1186,6 +1310,7 @@ function SetEditor({
   onSave,
   onCancel,
   onDelete,
+  onCollapse,
   active,
 }: {
   measure: DayExercise['exercise']['measure']
@@ -1196,6 +1321,8 @@ function SetEditor({
   onSave: (values: SetValues, note: string, rpe: number | null) => void
   onCancel?: () => void
   onDelete?: () => void
+  /** Tapping the box's header closes it. */
+  onCollapse?: () => void
   active?: { number: string; target: string; isNext: boolean }
 }) {
   const fields = MEASURE_FIELDS[measure]
@@ -1242,11 +1369,20 @@ function SetEditor({
     <div
       className={`rounded-xl p-3 ${active ? `bg-emerald-500/10 ${active.isNext ? 'ring-2 ring-emerald-500' : ''}` : 'bg-neutral-100 dark:bg-neutral-800/60'}`}
     >
-      {active && (
-        <p className="mb-2 text-sm">
-          <span className="font-semibold">Set {active.number}</span>
-          <span className="text-neutral-500"> · target {active.target}</span>
-        </p>
+      {(active || onCollapse) && (
+        <button type="button" onClick={onCollapse} className="mb-2 flex w-full items-center gap-1 text-left text-sm" aria-label="Close this set">
+          {active ? (
+            <>
+              <span className="font-semibold">Set {active.number}</span>
+              <span className="text-neutral-500"> · target {active.target}</span>
+            </>
+          ) : (
+            <span className="text-neutral-500">Edit set</span>
+          )}
+          <span className="ml-auto text-neutral-400" aria-hidden>
+            ▴
+          </span>
+        </button>
       )}
       {fields.map((f) => (
         <div key={f} className="mb-2 flex items-center gap-2">
