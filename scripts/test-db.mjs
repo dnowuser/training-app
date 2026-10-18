@@ -205,6 +205,23 @@ await test('exercises list their muscles and the feats they build', async () => 
   assert.deepEqual(row.feats, ['bench-315'])
 })
 
+await test('drills can share a group', async () => {
+  await db.query(`update exercises set group_name = 'Foot work' where slug = 'bench-press'`)
+  const row = await one(`select group_name from exercises where slug = 'bench-press'`)
+  assert.equal(row.group_name, 'Foot work')
+  await db.query(`update exercises set group_name = null where slug = 'bench-press'`)
+})
+
+await test('a note can be marked done without touching the note', async () => {
+  const s = await one(`select id from sessions limit 1`)
+  await db.query(`update sessions set notes = 'Split up foot work' where id = $1`, [s.id])
+  await db.query(`insert into note_status (source, source_id, done_on, response) values ('session', $1, '2026-10-18', 'Built')`, [s.id])
+  const row = await one(`select n.response, s.notes from note_status n join sessions s on s.id = n.source_id where n.source_id = $1`, [s.id])
+  assert.equal(row.response, 'Built')
+  assert.equal(row.notes, 'Split up foot work')
+  await assert.rejects(db.query(`insert into note_status (source, source_id) values ('session', $1)`, [s.id]))
+})
+
 await test('views report sets and feat progress', async () => {
   const logged = await one(`select count(*)::int as n from session_log where set_id is not null`)
   assert.equal(logged.n, 1)

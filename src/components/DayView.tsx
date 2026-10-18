@@ -56,6 +56,7 @@ import { dequeue, enqueue, isNetworkError, pendingSet, QUEUE_EVENT, queuedAsLogg
 import { supabase } from '../lib/supabase'
 import { PrescriptionForm } from './PrescriptionForm'
 import { MuscleDiagram } from './MuscleDiagram'
+import { sectionsOf } from '../lib/sections'
 import { SessionOptions } from './SessionOptions'
 import type { Block, FeatRef, LoggedSet } from '../lib/types'
 
@@ -517,6 +518,63 @@ function SessionView({
 
   const finished = session.status === 'done' || session.status === 'partial'
 
+
+  const sections = sectionsOf(items)
+  // A section or group is open until all its sets are logged; a tap overrides that either way.
+  const [openOverride, setOpenOverride] = useState<Record<string, boolean>>({})
+  const rowsOf = (item: DayExercise) => rowsFor(item, setsFor(item.id), day.trainingMaxes.get(item.exercise_id))
+  const progress = (list: DayExercise[]) => {
+    const rows = list.filter((it) => !it.skipped).flatMap((it) => rowsOf(it).filter((r) => r.planned))
+    return { done: rows.filter((r) => r.logged).length, total: rows.length }
+  }
+  const complete = (list: DayExercise[]) => {
+    const { done, total } = progress(list)
+    return total > 0 && done === total
+  }
+  const isOpen = (key: string, list: DayExercise[]) => openOverride[key] ?? !complete(list)
+  const toggle = (key: string, list: DayExercise[]) => setOpenOverride((o) => ({ ...o, [key]: !isOpen(key, list) }))
+
+  const renderItem = (item: DayExercise) => (
+    <div key={item.id}>
+      <ExerciseCard
+        item={item}
+        rows={rowsOf(item)}
+        tm={day.trainingMaxes.get(item.exercise_id)}
+        nextKey={nextKey}
+        focused={item.id === focusId}
+        editing={editing}
+        setEditing={setEditing}
+        onLog={(row, values) => void log(item, row, values)}
+        onSave={(row, values, note, rpe) => void save(item, row, values, note, rpe)}
+        onRpe={(set, rpe) => void setRpe(set, rpe)}
+        history={day.history[item.exercise.slug] ?? []}
+        feats={day.exerciseFeats[item.exercise_id] ?? []}
+        onDelete={(set) => void remove(set)}
+        onSkip={() => void toggleSkip(item)}
+        onEdit={() => setEditingItem(item)}
+        ladder={item.exercise.feat_id ? day.ladders[item.exercise.feat_id] : undefined}
+        onAdvanced={reload}
+      />
+      {editingItem?.id === item.id && (
+        <div className="mb-3 rounded-2xl border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900">
+          <p className="mb-2 text-sm text-neutral-500">
+            Change {item.exercise.name} for this day only. To change it every week, use Plan.
+          </p>
+          <PrescriptionForm
+            initial={stored.get(item.id)?.prescription ?? item.prescription}
+            initialNotes={item.notes ?? ''}
+            askReason
+            onCancel={() => setEditingItem(null)}
+            onSave={(p, notes, reason) => void editItem(item, p, notes, reason)}
+          />
+          <button type="button" onClick={() => void removeItem(item)} className="mt-3 text-sm text-red-600 underline">
+            Remove from this day
+          </button>
+        </div>
+      )}
+    </div>
+  )
+
   return (
     <>
       <h1 className="text-2xl leading-tight font-semibold">{session.name}</h1>
@@ -560,50 +618,32 @@ function SessionView({
       )}
 
       <div className="mt-2">
-        {items.map((item, i) => (
-          <div key={item.id}>
-            {item.block !== items[i - 1]?.block && (
-              <h2 className="mt-6 mb-2 text-xs font-semibold tracking-wide text-neutral-500 uppercase">
-                {BLOCK_LABELS[item.block]}
-              </h2>
+        {sections.map((section) => (
+          <Fold
+            key={section.key}
+            title={BLOCK_LABELS[section.block]}
+            {...progress(section.items)}
+            open={isOpen(section.key, section.items)}
+            onToggle={() => toggle(section.key, section.items)}
+            level="section"
+          >
+            {section.groups.map((group) =>
+              group.name ? (
+                <Fold
+                  key={group.key}
+                  title={group.name}
+                  {...progress(group.items)}
+                  open={isOpen(group.key, group.items)}
+                  onToggle={() => toggle(group.key, group.items)}
+                  level="group"
+                >
+                  {group.items.map(renderItem)}
+                </Fold>
+              ) : (
+                group.items.map(renderItem)
+              ),
             )}
-            <ExerciseCard
-              item={item}
-              rows={rowsFor(item, setsFor(item.id), day.trainingMaxes.get(item.exercise_id))}
-              tm={day.trainingMaxes.get(item.exercise_id)}
-              nextKey={nextKey}
-              focused={item.id === focusId}
-              editing={editing}
-              setEditing={setEditing}
-              onLog={(row, values) => void log(item, row, values)}
-              onSave={(row, values, note, rpe) => void save(item, row, values, note, rpe)}
-              onRpe={(set, rpe) => void setRpe(set, rpe)}
-              history={day.history[item.exercise.slug] ?? []}
-              feats={day.exerciseFeats[item.exercise_id] ?? []}
-              onDelete={(set) => void remove(set)}
-              onSkip={() => void toggleSkip(item)}
-              onEdit={() => setEditingItem(item)}
-              ladder={item.exercise.feat_id ? day.ladders[item.exercise.feat_id] : undefined}
-              onAdvanced={reload}
-            />
-            {editingItem?.id === item.id && (
-              <div className="mb-3 rounded-2xl border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900">
-                <p className="mb-2 text-sm text-neutral-500">
-                  Change {item.exercise.name} for this day only. To change it every week, use Plan.
-                </p>
-                <PrescriptionForm
-                  initial={stored.get(item.id)?.prescription ?? item.prescription}
-                  initialNotes={item.notes ?? ''}
-                  askReason
-                  onCancel={() => setEditingItem(null)}
-                  onSave={(p, notes, reason) => void editItem(item, p, notes, reason)}
-                />
-                <button type="button" onClick={() => void removeItem(item)} className="mt-3 text-sm text-red-600 underline">
-                  Remove from this day
-                </button>
-              </div>
-            )}
-          </div>
+          </Fold>
         ))}
       </div>
 
@@ -630,6 +670,52 @@ function SessionView({
 
       <SessionOptions session={session} items={items} onChanged={reload} onError={(m) => onError(m)} />
     </>
+  )
+}
+
+function Fold({
+  title,
+  done,
+  total,
+  open,
+  onToggle,
+  level,
+  children,
+}: {
+  title: string
+  done: number
+  total: number
+  open: boolean
+  onToggle: () => void
+  level: 'section' | 'group'
+  children: ReactNode
+}) {
+  const finished = total > 0 && done === total
+  return (
+    <div className={level === 'group' ? 'mb-3 rounded-2xl border border-neutral-200 px-3 pb-1 dark:border-neutral-800' : ''}>
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={open}
+        className={`flex w-full items-center gap-2 text-left ${
+          level === 'section'
+            ? 'mt-6 mb-2 min-h-11 text-xs font-semibold tracking-wide text-neutral-500 uppercase'
+            : 'min-h-12 text-base font-semibold'
+        }`}
+      >
+        <span aria-hidden className={`inline-block transition-transform ${open ? 'rotate-90' : ''}`}>
+          ›
+        </span>
+        <span className="flex-1">{title}</span>
+        {total > 0 && (
+          <span className={`text-xs font-normal normal-case ${finished ? 'text-emerald-600' : 'text-neutral-500'}`}>
+            {finished ? '✓ ' : ''}
+            {done}/{total}
+          </span>
+        )}
+      </button>
+      {open && children}
+    </div>
   )
 }
 

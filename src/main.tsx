@@ -8,6 +8,7 @@ import { DayScreen } from './routes/Day'
 import { ExerciseScreen, ExercisesScreen } from './routes/Exercises'
 import { FeatDetailScreen, FeatsScreen } from './routes/Feats'
 import { MediaScreen } from './routes/Media'
+import { NotesScreen } from './routes/Notes'
 import { PlanScreen } from './routes/Plan'
 import { ProgressScreen } from './routes/Progress'
 import { ReviewScreen } from './routes/Review'
@@ -32,6 +33,7 @@ const router = createBrowserRouter([
       { path: 'search', element: <SearchScreen /> },
       { path: 'plan', element: <PlanScreen /> },
       { path: 'review', element: <ReviewScreen /> },
+      { path: 'notes', element: <NotesScreen /> },
       { path: '*', element: <NotFoundScreen /> },
     ],
   },
