@@ -8,6 +8,8 @@ export interface Figure {
   /** Body outline for the left half, mirrored for the right. */
   silhouette: string
   head: { cx: number; cy: number; r: number }
+  /** A smiley on the head marks the front view. */
+  face?: boolean
   muscles: Record<string, string>
   center?: Record<string, string>
   fibers: string
@@ -21,6 +23,7 @@ const SILHOUETTE =
 export const FRONT: Figure = {
   silhouette: SILHOUETTE,
   head: { cx: 50, cy: 12, r: 10 },
+  face: true,
   muscles: {
     'upper traps': 'M44.5 23.5 Q40 27.5 30 29.8 Q36 31.6 41 31.6 Z',
     'neck flexors': 'M46.5 20.5 Q44 26 41 31.6 L44.5 32 Q46.5 26 48.6 22 Z',
