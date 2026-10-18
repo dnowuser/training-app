@@ -391,3 +391,37 @@ export const BLOCK_COLORS: Record<Block, string> = {
   mobility: '#84cc16',
 }
 export const GROUP_COLORS = ['#2563eb', '#f97316', '#14b8a6', '#8b5cf6', '#e11d48', '#ca8a04', '#64748b']
+
+/**
+ * Sets per specific muscle in an average week (main movers in full, helpers by half),
+ * against its region's weekly target. Every muscle in `refs` is listed, worked or not.
+ */
+export function muscleBalance(items: PlanItem[], refs: MuscleRef[], weeks: number, measure: 'sets' | 'done' = 'sets') {
+  const sets: Record<string, number> = {}
+  for (const i of items) {
+    if (!i[measure]) continue
+    i.muscles.forEach((m, n) => {
+      sets[m] = (sets[m] ?? 0) + i[measure] * (n < 2 ? 1 : 0.5)
+    })
+  }
+  return refs
+    .filter((r) => REGION_TARGET[REGION_OF[r.name]])
+    .map((r) => {
+      const target = REGION_TARGET[REGION_OF[r.name]]
+      const perWeek = (sets[r.name] ?? 0) / Math.max(1, weeks)
+      return { muscle: r.name, part: r.part, perWeek: Math.round(perWeek * 2) / 2, target, ratio: perWeek / target }
+    })
+    .sort((a, b) => a.ratio - b.ratio)
+}
+
+/** Fills for one exercise on the anatomy map: main movers strong, the rest lighter. */
+export function exerciseFills(muscles: string[]): Record<string, { fill: string; title: string }> {
+  return Object.fromEntries(
+    muscles.map((m, i) => [
+      m,
+      i < 2
+        ? { fill: 'color-mix(in srgb, var(--series-1) 90%, var(--body-muscle))', title: `${m} (main)` }
+        : { fill: 'color-mix(in srgb, var(--series-1) 45%, var(--body-muscle))', title: m },
+    ]),
+  )
+}

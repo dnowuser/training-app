@@ -39,6 +39,7 @@ import {
 } from '../lib/logging'
 import { addDays, localISODate } from '../lib/dates'
 import { exerciseLevels } from '../lib/muscles'
+import { exerciseFills } from '../lib/overview'
 import { markStep } from '../lib/feats'
 import { describePrescription, formatDuration, plannedSets, type PlannedSet } from '../lib/prescription'
 import { parseTime } from '../lib/progress'
@@ -55,6 +56,7 @@ import { useRestTimer } from '../lib/restTimer'
 import { dequeue, enqueue, isNetworkError, pendingSet, QUEUE_EVENT, queuedAsLogged, readQueue } from '../lib/offline'
 import { supabase } from '../lib/supabase'
 import { PrescriptionForm } from './PrescriptionForm'
+import { AnatomyMap } from './AnatomyMap'
 import { MuscleDiagram } from './MuscleDiagram'
 import { sectionsOf } from '../lib/sections'
 import { SessionOptions } from './SessionOptions'
@@ -845,9 +847,12 @@ function ExerciseCard({
           )}
         </p>
       )}
-      {showMuscles && (
-        <MuscleDiagram level={exerciseLevels(item.exercise.muscles)} label={`Muscles ${item.exercise.name} works`} className="mx-auto mt-2 w-full max-w-[16rem]" />
-      )}
+      {showMuscles &&
+        (item.exercise.muscle_detail?.length ? (
+          <AnatomyMap fills={exerciseFills(item.exercise.muscle_detail)} label={`Muscles ${item.exercise.name} works`} className="mx-auto mt-2 w-full max-w-xs" />
+        ) : (
+          <MuscleDiagram level={exerciseLevels(item.exercise.muscles)} label={`Muscles ${item.exercise.name} works`} className="mx-auto mt-2 w-full max-w-[16rem]" />
+        ))}
       {item.exercise.cues && <p className="mt-2 text-sm text-neutral-600 dark:text-neutral-300">{item.exercise.cues}</p>}
       <Link to={`/exercises/${item.exercise.slug}`} className="mt-1 inline-block text-xs text-neutral-500 underline">
         More about {item.exercise.name.toLowerCase()}

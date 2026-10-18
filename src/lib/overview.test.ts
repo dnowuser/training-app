@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { balanceColor, estimateSeconds, featTable, muscleTree, regionBalance, workSets, type MuscleRef, type PlanItem } from './overview'
+import { balanceColor, estimateSeconds, featTable, muscleBalance, muscleTree, regionBalance, workSets, type MuscleRef, type PlanItem } from './overview'
 
 const ref = (name: string, part: string, grp: string, side: MuscleRef['side'], position: number): MuscleRef => ({
   name,
@@ -91,5 +91,14 @@ describe('regionBalance', () => {
   it('goes red to green as sets reach the target', () => {
     expect(balanceColor(0)).toBe('rgb(220 38 38)')
     expect(balanceColor(1)).toBe('rgb(22 163 74)')
+  })
+})
+
+describe('muscleBalance', () => {
+  it('scores each specific muscle against its region target', () => {
+    const r = [ref('lats', 'Back', 'Lats', 'back', 1), ref('biceps', 'Arms', 'Biceps', 'front', 2)]
+    const rows = muscleBalance([item('a', 4, ['lats', 'biceps'])], r, 1)
+    expect(rows.find((x) => x.muscle === 'lats')).toMatchObject({ perWeek: 4, target: 10 })
+    expect(rows[0].muscle).toBe('lats')
   })
 })
