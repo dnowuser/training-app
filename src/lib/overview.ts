@@ -98,7 +98,7 @@ export async function loadPlan(db: SupabaseClient, start: string, end: string): 
       .from('sessions')
       .select(
         'date, name, session_exercises(position, block, skipped, prescription, sets(is_warmup), ' +
-          'exercise:exercises(name, slug, group_name, muscle_detail, feat:feats(name), links:exercise_feats(feat:feats(name))))',
+          'exercise:exercises(name, slug, group_name, muscle_detail, feat:feats!exercises_feat_id_fkey(name), links:exercise_feats(feat:feats(name))))',
       )
       .gte('date', start)
       .lte('date', end)
