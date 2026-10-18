@@ -7,7 +7,6 @@ import {
   deleteSet,
   insertSet,
   loadDay,
-  recordTrainingMax,
   removeSessionExercise,
   setSkipped,
   updateSession,
@@ -37,7 +36,7 @@ import {
   type SetField,
   type SetValues,
 } from '../lib/logging'
-import { addDays, localISODate } from '../lib/dates'
+import { localISODate } from '../lib/dates'
 import { exerciseLevels } from '../lib/muscles'
 import { exerciseFills } from '../lib/overview'
 import { markStep } from '../lib/feats'
@@ -48,11 +47,11 @@ import {
   nextLoad,
   readyToMoveUp,
   RPE_OPTIONS,
-  topPlannedSet,
-  trainingMaxUpdate,
   type PastSession,
 } from '../lib/progression'
 import { useRestTimer } from '../lib/restTimer'
+import { addToOutbox, applyOutbox, OUTBOX_EVENT, readOutbox } from '../lib/outbox'
+import { applyTrainingMaxes } from '../lib/finish'
 import { dequeue, enqueue, isNetworkError, pendingSet, QUEUE_EVENT, queuedAsLogged, readQueue } from '../lib/offline'
 import { supabase } from '../lib/supabase'
 import { PrescriptionForm } from './PrescriptionForm'
@@ -126,6 +125,18 @@ const rowKey = (itemId: string, setNumber: number) => `${itemId}:${setNumber}`
  * (via SessionOptions) notes, media and one-off edits. Used by Today and Day detail.
  * Without signal it shows the last copy it loaded and queues new sets.
  */
+/** A loaded day with changes still waiting to send laid over it, so a saved copy shows what you did. */
+function withPending(d: Day): Day {
+  const items = readOutbox()
+  if (!items.length) return d
+  return {
+    ...d,
+    sets: applyOutbox(d.sets, 'sets', items),
+    sessions: applyOutbox(d.sessions, 'sessions', items),
+    exercises: applyOutbox(d.exercises, 'session_exercises', items),
+  }
+}
+
 export function DayView({ date }: { date: string }) {
   const [day, setDay] = useState<Day | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -136,13 +147,14 @@ export function DayView({ date }: { date: string }) {
   const fetchDay = useCallback(async () => {
     if (!supabase) return
     try {
-      const d = await loadDay(supabase, date)
+      const d = withPending(await loadDay(supabase, date))
       cacheDay(date, d)
       setDay(d)
       setOffline(false)
       setError(null)
     } catch (e) {
-      const cached = isNetworkError(e) ? cachedDay(date) : null
+      const saved = isNetworkError(e) ? cachedDay(date) : null
+      const cached = saved && withPending(saved)
       if (cached) {
         setDay(cached)
         setOffline(true)
@@ -156,14 +168,16 @@ export function DayView({ date }: { date: string }) {
     if (!supabase) return
     let cancelled = false
     loadDay(supabase, date).then(
-      (d) => {
+      (loaded) => {
         if (cancelled) return
+        const d = withPending(loaded)
         cacheDay(date, d)
         setDay(d)
       },
       (e: unknown) => {
         if (cancelled) return
-        const cached = isNetworkError(e) ? cachedDay(date) : null
+        const saved = isNetworkError(e) ? cachedDay(date) : null
+        const cached = saved && withPending(saved)
         if (cached) {
           setDay(cached)
           setOffline(true)
@@ -184,8 +198,18 @@ export function DayView({ date }: { date: string }) {
         return next
       })
     }
+    let outboxSize = readOutbox().length
+    const onOutbox = () => {
+      const n = readOutbox().length
+      if (n < outboxSize && n === 0) void fetchDay()
+      outboxSize = n
+    }
     window.addEventListener(QUEUE_EVENT, onQueue)
-    return () => window.removeEventListener(QUEUE_EVENT, onQueue)
+    window.addEventListener(OUTBOX_EVENT, onOutbox)
+    return () => {
+      window.removeEventListener(QUEUE_EVENT, onQueue)
+      window.removeEventListener(OUTBOX_EVENT, onOutbox)
+    }
   }, [fetchDay])
 
   // Keep the offline copy current as sets are logged.
@@ -315,12 +339,28 @@ function SessionView({
   const plannedCount = allRows.filter(({ r }) => r.planned).length
   const doneCount = allRows.filter(({ r }) => r.planned && r.logged).length
 
-  async function start() {
+  /** Try a change online; without signal, show it now and send it later. */
+  async function act(online: () => Promise<void>, offline: () => void) {
     try {
-      patchSession(await updateSession(db, session.id, { status: 'in_progress', started_at: nowISO() }))
+      await online()
     } catch (e) {
-      report(e)
+      if (isNetworkError(e)) offline()
+      else report(e)
     }
+  }
+
+  /** Change the session on this phone and queue the same change for the server. */
+  function patchSessionLater(patch: Partial<DaySession>) {
+    patchSession({ ...session, ...patch })
+    addToOutbox({ kind: 'update', table: 'sessions', id: session.id, patch })
+  }
+
+  async function start() {
+    const patch = { status: 'in_progress' as const, started_at: nowISO() }
+    await act(
+      async () => patchSession(await updateSession(db, session.id, patch)),
+      () => patchSessionLater(patch),
+    )
   }
 
   async function log(item: DayExercise, row: Row, values: SetValues, note?: string, rpe?: number | null) {
@@ -355,6 +395,7 @@ function SessionView({
       if (isNetworkError(e)) {
         // No signal: keep it on the phone and send it later (see SyncBanner).
         enqueue({ tempId: `queued-${crypto.randomUUID()}`, set, queuedAt: nowISO() })
+        if (session.status === 'planned') patchSessionLater({ status: 'in_progress', started_at: nowISO() })
       } else {
         timer.stop()
         report(e)
@@ -377,18 +418,20 @@ function SessionView({
       setEditing(null)
       return
     }
-    try {
-      const saved = await updateSet(db, row.logged.id, {
-        ...values,
-        note: note || null,
-        rpe,
-        hit_target: row.planned ? hitTarget(row.planned, item.exercise.measure, values) : true,
-      })
-      patchSets((sets) => sets.map((s) => (s.id === saved.id ? saved : s)))
-      setEditing(null)
-    } catch (e) {
-      report(e)
-    }
+    const id = row.logged.id
+    const patch = { ...values, note: note || null, rpe, hit_target: hit }
+    await act(
+      async () => {
+        const saved = await updateSet(db, id, patch)
+        patchSets((sets) => sets.map((s) => (s.id === saved.id ? saved : s)))
+        setEditing(null)
+      },
+      () => {
+        patchSets((sets) => sets.map((s) => (s.id === id ? { ...s, ...patch } : s)))
+        addToOutbox({ kind: 'update', table: 'sets', id, patch })
+        setEditing(null)
+      },
+    )
   }
 
   /** One tap on an RPE chip right after logging a set. */
@@ -405,40 +448,9 @@ function SessionView({
     try {
       await updateSetRpe(db, set.id, rpe)
     } catch (e) {
-      if (isNetworkError(e)) return onError('No signal: that RPE wasn’t saved. Tap it again when you’re back online.')
+      if (isNetworkError(e)) return addToOutbox({ kind: 'update', table: 'sets', id: set.id, patch: { rpe } })
       report(e)
     }
-  }
-
-  /**
-   * After a heavy ladder session, move each lift's training max by how its top
-   * set went (see trainingMaxUpdate). Takes effect from tomorrow so today's
-   * loads don't shift; a second Finish on the same day doesn't move it again.
-   */
-  async function adjustTrainingMaxes(): Promise<string[]> {
-    const notes: string[] = []
-    for (const item of items) {
-      const original = stored.get(item.id) ?? item
-      if (original.prescription.scheme !== 'ladder' || item.skipped) continue
-      const tm = day.trainingMaxes.get(item.exercise_id)
-      if (!tm) continue
-      const top = topPlannedSet(plannedSets(original.prescription, tm))
-      if (!top) continue // light day (no 96% single): the training max stays put
-      const logged = setsFor(item.id).find((s) => s.set_number === top.setNumber && !isInFlight(s) && !isQueued(s))
-      const update = trainingMaxUpdate(tm, item.exercise.slug, logged, top.reps ?? 1, session.is_deload)
-      const name = item.exercise.name
-      if (!update) {
-        notes.push(`${name}: training max stays ${tm} lb${logged?.rpe ? ` (top set RPE ${logged.rpe})` : ''}.`)
-        continue
-      }
-      const saved = await recordTrainingMax(db, item.exercise, update.to, addDays(session.date, 1), `Auto: ${update.reason}`)
-      notes.push(
-        saved
-          ? `${name}: training max ${update.from} → ${update.to} lb next time (${update.reason}).`
-          : `${name}: training max already updated for this session.`,
-      )
-    }
-    return notes
   }
 
   async function remove(set: LoggedSet) {
@@ -448,22 +460,33 @@ function SessionView({
       setEditing(null)
       return
     }
-    try {
-      await deleteSet(db, set.id)
-      patchSets((sets) => sets.filter((s) => s.id !== set.id))
-      setEditing(null)
-    } catch (e) {
-      report(e)
-    }
+    await act(
+      async () => {
+        await deleteSet(db, set.id)
+        patchSets((sets) => sets.filter((s) => s.id !== set.id))
+        setEditing(null)
+      },
+      () => {
+        patchSets((sets) => sets.filter((s) => s.id !== set.id))
+        addToOutbox({ kind: 'delete', table: 'sets', id: set.id })
+        setEditing(null)
+      },
+    )
   }
 
   async function toggleSkip(item: DayExercise) {
-    try {
-      await setSkipped(db, item.id, !item.skipped)
-      setDay((d) => d && { ...d, exercises: d.exercises.map((e) => (e.id === item.id ? { ...e, skipped: !e.skipped } : e)) })
-    } catch (e) {
-      report(e)
-    }
+    const skipped = !item.skipped
+    const show = () => setDay((d) => d && { ...d, exercises: d.exercises.map((e) => (e.id === item.id ? { ...e, skipped } : e)) })
+    await act(
+      async () => {
+        await setSkipped(db, item.id, skipped)
+        show()
+      },
+      () => {
+        show()
+        addToOutbox({ kind: 'update', table: 'session_exercises', id: item.id, patch: { skipped } })
+      },
+    )
   }
 
   async function editItem(shown: DayExercise, prescription: DayExercise['prescription'], notes: string, reason: string) {
@@ -496,26 +519,32 @@ function SessionView({
   async function finish() {
     const complete = doneCount >= plannedCount
     if (!complete && !window.confirm(`${doneCount} of ${plannedCount} sets logged. Finish anyway?`)) return
-    try {
-      // Exercises with nothing logged count as skipped.
-      const untouched = items.filter((i) => !i.skipped && setsFor(i.id).length === 0)
-      await Promise.all(untouched.map((i) => setSkipped(db, i.id, true)))
-      setDay(
-        (d) =>
-          d && { ...d, exercises: d.exercises.map((e) => (untouched.some((u) => u.id === e.id) ? { ...e, skipped: true } : e)) },
-      )
-      patchSession(
-        await updateSession(db, session.id, {
-          status: complete ? 'done' : 'partial',
-          started_at: session.started_at ?? nowISO(),
-          completed_at: nowISO(),
-        }),
-      )
-      timer.stop()
-      setTmNotes(await adjustTrainingMaxes())
-    } catch (e) {
-      report(e)
-    }
+    // Exercises with nothing logged count as skipped.
+    const untouched = items.filter((i) => !i.skipped && setsFor(i.id).length === 0)
+    const patch = { status: complete ? ('done' as const) : ('partial' as const), started_at: session.started_at ?? nowISO(), completed_at: nowISO() }
+    const showSkipped = () =>
+      setDay((d) => d && { ...d, exercises: d.exercises.map((e) => (untouched.some((u) => u.id === e.id) ? { ...e, skipped: true } : e)) })
+    timer.stop()
+    // Sets still waiting to send can't move the training max yet: work it out once they're in.
+    const waiting = items.some((i) => setsFor(i.id).some((st) => isInFlight(st) || isQueued(st)))
+    await act(
+      async () => {
+        await Promise.all(untouched.map((i) => setSkipped(db, i.id, true)))
+        showSkipped()
+        patchSession(await updateSession(db, session.id, patch))
+        if (waiting) {
+          addToOutbox({ kind: 'training-max', date: session.date, sessionId: session.id })
+          setTmNotes(['Training maxes update once the sets saved on this phone are sent.'])
+        } else setTmNotes(await applyTrainingMaxes(db, { ...day, exercises: day.exercises.filter((e) => !untouched.some((u) => u.id === e.id)) }, session.id))
+      },
+      () => {
+        showSkipped()
+        for (const i of untouched) addToOutbox({ kind: 'update', table: 'session_exercises', id: i.id, patch: { skipped: true } })
+        patchSessionLater(patch)
+        addToOutbox({ kind: 'training-max', date: session.date, sessionId: session.id })
+        setTmNotes(['No signal: finished on this phone. Training maxes update when it’s back online.'])
+      },
+    )
   }
 
   const finished = session.status === 'done' || session.status === 'partial'
