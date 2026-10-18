@@ -30,11 +30,13 @@ body {
 :root {
   --body-fill: #e7e5e4;
   --body-muscle: #d6d3d1;
+  --anatomy-line: #44403c;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
     --body-fill: #2a2a2a;
     --body-muscle: #3a3a3a;
+    --anatomy-line: #a8a29e;
   }
 }

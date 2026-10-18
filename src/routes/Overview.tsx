@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Link } from 'react-router'
-import { MuscleDiagram } from '../components/MuscleDiagram'
+import { AnatomyMap } from '../components/AnatomyMap'
+import { NOT_DRAWN } from '../lib/anatomy'
 import { addDays, localISODate, parseISODate, startOfWeek } from '../lib/dates'
 import {
   BLOCK_COLORS,
@@ -15,7 +16,7 @@ import {
   featTable,
   loadPlan,
   muscleTree,
-  regionBalance,
+  muscleBalance,
   type MuscleNode,
   type MuscleRef,
   type MuscleView,
@@ -137,7 +138,7 @@ export function OverviewScreen() {
             )}
             .
           </p>
-          <Balance items={items} weeks={columns.length} period={period} />
+          <Balance items={items} refs={data.muscles} weeks={columns.length} period={period} />
           <Days items={items} dates={dates} period={period} />
           <Muscles items={items} refs={data.muscles} columns={columns} />
           <Feats items={items} columns={columns} />
@@ -187,12 +188,12 @@ const LEGEND: [number, string][] = [
 ]
 
 /** Body map coloured by sets against a weekly target, to spot what's undertrained. */
-function Balance({ items, weeks, period }: { items: PlanItem[]; weeks: number; period: Period }) {
+function Balance({ items, refs, weeks, period }: { items: PlanItem[]; refs: MuscleRef[]; weeks: number; period: Period }) {
   const [measure, setMeasure] = useState<'sets' | 'done'>('sets')
   const [all, setAll] = useState(false)
-  const rows = regionBalance(items, weeks, measure)
-  const colors = Object.fromEntries(
-    rows.map((r) => [r.region, { fill: balanceColor(r.ratio), title: `${r.region}: ${r.perWeek} of ${r.target} sets a week` }]),
+  const rows = muscleBalance(items, refs, weeks, measure)
+  const fills = Object.fromEntries(
+    rows.map((r) => [r.muscle, { fill: balanceColor(r.ratio), title: `${r.muscle}: ${r.perWeek} of ${r.target} sets a week` }]),
   )
   const low = rows.filter((r) => r.ratio < 0.75)
   return (
@@ -203,7 +204,7 @@ function Balance({ items, weeks, period }: { items: PlanItem[]; weeks: number; p
       <div className="mt-3">
         <Segmented value={measure} options={{ sets: 'Planned', done: 'Done' }} onChange={setMeasure} />
       </div>
-      <MuscleDiagram level={{}} colors={colors} label="Body map of training balance" className="mx-auto mt-3 w-full max-w-sm" />
+      <AnatomyMap fills={fills} label="Anatomy map of training balance" className="mx-auto mt-3 w-full max-w-md" />
       <div className="mt-2 flex items-center gap-2 text-xs text-neutral-500">
         <span>Under</span>
         <span
@@ -222,9 +223,12 @@ function Balance({ items, weeks, period }: { items: PlanItem[]; weeks: number; p
           <p className="mt-4 text-sm font-medium">Undertrained</p>
           <ul className="mt-1 space-y-1">
             {(all ? low : low.slice(0, 6)).map((r) => (
-              <li key={r.region} className="flex items-center gap-2 text-sm">
+              <li key={r.muscle} className="flex items-center gap-2 text-sm">
                 <span className="h-3 w-3 shrink-0 rounded-sm" style={{ background: balanceColor(r.ratio) }} />
-                <span className="flex-1 capitalize">{r.region}</span>
+                <span className="flex-1">
+                  <span className="capitalize">{r.muscle}</span> <span className="text-xs text-neutral-500">{r.part}</span>
+                  {NOT_DRAWN.includes(r.muscle) && <span className="text-xs text-neutral-500"> · deep, not drawn</span>}
+                </span>
                 <span className="text-neutral-500 tabular-nums">
                   {r.perWeek} / {r.target} sets
                 </span>
