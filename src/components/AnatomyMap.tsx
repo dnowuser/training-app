@@ -55,6 +55,11 @@ function Body({ figure, fills, dx, label }: { figure: Figure; fills: Record<stri
         <g transform="translate(100 0) scale(-1 1)">{muscles.map(([name, d]) => shape(name, d, name + '-r'))}</g>
         {Object.entries(figure.center ?? {}).map(([name, d]) => shape(name, d, name + '-c'))}
       </g>
+      {/* Fibre lines for texture; they don't take taps. */}
+      <g fill="none" stroke="var(--anatomy-line)" strokeWidth={0.35} strokeLinecap="round" opacity={0.45} pointerEvents="none">
+        <path d={figure.fibers} />
+        <path d={figure.fibers} transform="translate(100 0) scale(-1 1)" />
+      </g>
       <text x={50} y={210} textAnchor="middle" fontSize={7} fill="var(--chart-ink)">
         {label}
       </text>
