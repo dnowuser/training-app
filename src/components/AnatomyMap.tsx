@@ -49,6 +49,13 @@ function Body({ figure, fills, dx, label }: { figure: Figure; fills: Record<stri
         <path d={figure.silhouette} transform="translate(100 0) scale(-1 1)" />
         <circle cx={figure.head.cx} cy={figure.head.cy} r={figure.head.r} />
       </g>
+      {figure.face && (
+        <g stroke="var(--anatomy-line)" strokeWidth={0.8} strokeLinecap="round" fill="var(--anatomy-line)">
+          <circle cx={figure.head.cx - 3.5} cy={figure.head.cy - 2} r={1.1} stroke="none" />
+          <circle cx={figure.head.cx + 3.5} cy={figure.head.cy - 2} r={1.1} stroke="none" />
+          <path d={`M${figure.head.cx - 4.5} ${figure.head.cy + 2.5} Q${figure.head.cx} ${figure.head.cy + 7} ${figure.head.cx + 4.5} ${figure.head.cy + 2.5}`} fill="none" />
+        </g>
+      )}
       {/* Bold outlines keep every muscle visibly separate. */}
       <g stroke="var(--anatomy-line)" strokeWidth={0.7} strokeLinejoin="round">
         {muscles.map(([name, d]) => shape(name, d, name))}
