@@ -222,6 +222,19 @@ await test('a note can be marked done without touching the note', async () => {
   await assert.rejects(db.query(`insert into note_status (source, source_id) values ('session', $1)`, [s.id]))
 })
 
+await test('exercises name specific muscles from the reference tree', async () => {
+  await db.query(`update exercises set muscle_detail = '{lats,teres major,biceps}' where slug = 'weighted-pull-up'`)
+  const rows = await all(`
+    select r.part, r.grp, r.name from exercises e, unnest(e.muscle_detail) m join muscle_ref r on r.name = m
+    where e.slug = 'weighted-pull-up' order by r.position`)
+  assert.deepEqual(rows.map((r) => r.name), ['lats', 'teres major', 'biceps'])
+  assert.equal(rows[0].part, 'Back')
+  await db.exec(`set role authenticated; select set_config('request.jwt.claim.sub', '${STRANGER}', false);`)
+  const { n } = await one(`select count(*)::int as n from muscle_ref`)
+  await db.exec(`reset role; select set_config('request.jwt.claim.sub', '', false);`)
+  assert.ok(n > 40)
+})
+
 await test('views report sets and feat progress', async () => {
   const logged = await one(`select count(*)::int as n from session_log where set_id is not null`)
   assert.equal(logged.n, 1)
