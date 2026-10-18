@@ -57,6 +57,8 @@ export interface Exercise {
   muscles: string[]
   /** Drills that belong together (e.g. "Foot work"); the day view folds them under one header. */
   group_name: string | null
+  /** Specific muscles (muscle_ref.name), main movers first; `muscles` is the broad list the body diagram draws. */
+  muscle_detail: string[]
 }
 
 /** A feat an exercise builds toward (exercise_feats). */
