@@ -25,7 +25,7 @@ React 19 + TypeScript + Vite, React Router (data router in `src/main.tsx`), Tail
 ## Layout
 
 ```
-src/main.tsx              router and screen list; registers public/sw.js (offline app shell) in production
+src/main.tsx              router and screen list; registers public/sw.js in production: offline app shell, plus a saved copy of every Supabase read, served when there's no signal or it's too slow (4 s)
 src/components/           Layout (auth gate, tab bar, sync banner), DayView (a day's sessions: logging, edits),
                           SessionOptions, PrescriptionForm, MediaGallery, LineChart, RestTimer, SignIn
 src/routes/               one file per screen: Today, Day, Calendar, Feats, Progress, Media, Search, Review, Plan, Exercises, Notes, Overview (/week: week and month plan)
@@ -33,6 +33,9 @@ src/lib/supabase.ts       client; null until .env.local is filled in
 src/lib/types.ts          row types + the Prescription jsonb shape
 src/lib/api.ts            day loading/caching, set logging, one-off session edits (each writes a changes row)
 src/lib/offline.ts        queue for sets logged without signal; SyncBanner sends them when back online
+src/lib/outbox.ts         other changes made without signal (set edits, RPE, skip, start/finish, training max after finish), sent after the set queue
+src/lib/prefetch.ts       loads the next week of days and this week's plan while there's signal
+src/lib/finish.ts         training max changes after a finished session (now, or later for one finished offline)
 src/lib/plan.ts           template edits + regenerate_sessions, cycles, change log
 src/lib/feats.ts, media.ts, progress.ts, calendar.ts, search.ts, review.ts, library.ts, muscles.ts, notes.ts, sections.ts, overview.ts   data for those screens
 src/lib/prescription.ts   ladder loads from training max, set expansion, one-line summaries
@@ -110,6 +113,7 @@ Wayson should never have to leave the Today screen to know what to do. Every exe
 - Progress → Feat outlook: each feat's history plus a dashed projection to the goal and its date. Pace per feat lives in `FEAT_MODELS` (`src/lib/outlook.ts`): measured feats (training max, mile/5K time, touch height) gain less each month; ladder feats use the fast end of their usual range, or Wayson's own pace once two steps are done and it's faster.
 - More → Week and month plan (`/week`): estimated minutes per day by block, a training-balance body map (sets per region against `REGION_TARGET` in `src/lib/overview.ts`, red to green), a muscle tree from `muscle_ref` and feats in sets or minutes. A muscle in `muscle_ref` needs a body-map region in `REGION_OF` there and, if it's on the surface, a shape in `src/lib/anatomy.ts` (the outlined front/back anatomy map; deep muscles go in `NOT_DRAWN`).
 - The day view groups exercises into folding sections by block (open until every set in it is logged), and drills sharing `exercises.group_name` into a folding group inside.
+- Works offline: reads come from the service worker's saved copy; writes on the Today/Day screen go to the set queue or the outbox. A new write elsewhere should either queue the same way or say plainly that it needs signal.
 - Keep the UI mobile-first, thumb-reachable and fast to log with one hand. Big tap targets on the Today screen. The set you're on is always open on its card (weight, reps, RPE, one ✓ Log set button); other sets log with one tap on ✓ or open with a tap on their text.
 - A new exercise needs `cues`, `muscles`, `muscle_detail` and its `exercise_feats` rows, or the card, library and muscle map will have gaps.
 - Don't add a dependency when a few lines will do.

@@ -4,6 +4,17 @@ import { localISODate } from '../lib/dates'
 import { download, exportAll, exportLogCsv } from '../lib/exportData'
 import { supabase } from '../lib/supabase'
 
+/** Sign out and forget the data saved on this phone for offline use. */
+async function signOut() {
+  navigator.serviceWorker?.controller?.postMessage('clear-data')
+  try {
+    for (const key of Object.keys(localStorage)) if (key.startsWith('day:')) localStorage.removeItem(key)
+  } catch {
+    // Storage blocked: nothing saved to clear.
+  }
+  await supabase?.auth.signOut()
+}
+
 export function MoreScreen() {
   const links = [
     { to: '/week', label: 'Week and month plan', hint: 'Time per day, training balance body map, muscles and feats' },
@@ -31,7 +42,7 @@ export function MoreScreen() {
       {supabase && (
         <button
           type="button"
-          onClick={() => void supabase?.auth.signOut()}
+          onClick={() => void signOut()}
           className="mt-6 w-full rounded-xl border border-neutral-300 py-3 text-neutral-600 dark:border-neutral-700 dark:text-neutral-300"
         >
           Sign out
