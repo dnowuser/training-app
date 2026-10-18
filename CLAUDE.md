@@ -28,13 +28,13 @@ React 19 + TypeScript + Vite, React Router (data router in `src/main.tsx`), Tail
 src/main.tsx              router and screen list; registers public/sw.js (offline app shell) in production
 src/components/           Layout (auth gate, tab bar, sync banner), DayView (a day's sessions: logging, edits),
                           SessionOptions, PrescriptionForm, MediaGallery, LineChart, RestTimer, SignIn
-src/routes/               one file per screen: Today, Day, Calendar, Feats, Progress, Media, Search, Review, Plan, Exercises, Notes
+src/routes/               one file per screen: Today, Day, Calendar, Feats, Progress, Media, Search, Review, Plan, Exercises, Notes, Overview (/week: week and month plan)
 src/lib/supabase.ts       client; null until .env.local is filled in
 src/lib/types.ts          row types + the Prescription jsonb shape
 src/lib/api.ts            day loading/caching, set logging, one-off session edits (each writes a changes row)
 src/lib/offline.ts        queue for sets logged without signal; SyncBanner sends them when back online
 src/lib/plan.ts           template edits + regenerate_sessions, cycles, change log
-src/lib/feats.ts, media.ts, progress.ts, calendar.ts, search.ts, review.ts, library.ts, muscles.ts, notes.ts, sections.ts   data for those screens
+src/lib/feats.ts, media.ts, progress.ts, calendar.ts, search.ts, review.ts, library.ts, muscles.ts, notes.ts, sections.ts, overview.ts   data for those screens
 src/lib/prescription.ts   ladder loads from training max, set expansion, one-line summaries
 src/lib/logging.ts        what a tap logs per measure, hit_target, set labels, rest after a set
 src/lib/dates.ts          local-date helpers (sessions are keyed by local date)
@@ -107,6 +107,7 @@ Wayson should never have to leave the Today screen to know what to do. Every exe
 
 - Schema changes: add `supabase/migrations/<timestamp>_<name>.sql`, extend `scripts/test-db.mjs` to cover it, keep `src/lib/types.ts` in sync, run `npm run check`.
 - The PGlite test stubs Supabase's `auth` and `storage` schemas; anything else Supabase-specific needs a stub there too.
+- More → Week and month plan (`/week`): estimated minutes per day by block, a training-balance body map (sets per region against `REGION_TARGET` in `src/lib/overview.ts`, red to green), a muscle tree from `muscle_ref` and feats in sets or minutes. A muscle in `muscle_ref` needs a body-map region in `REGION_OF` there.
 - The day view groups exercises into folding sections by block (open until every set in it is logged), and drills sharing `exercises.group_name` into a folding group inside.
 - Keep the UI mobile-first, thumb-reachable and fast to log with one hand. Big tap targets on the Today screen. The set you're on is always open on its card (weight, reps, RPE, one ✓ Log set button); other sets log with one tap on ✓ or open with a tap on their text.
 - A new exercise needs `cues`, `muscles`, `muscle_detail` and its `exercise_feats` rows, or the card, library and muscle map will have gaps.
