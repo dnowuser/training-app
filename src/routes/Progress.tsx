@@ -59,7 +59,12 @@ export function ProgressScreen() {
 
   return (
     <section>
-      <h1 className="text-2xl font-semibold">Progress</h1>
+      <div className="flex items-baseline justify-between gap-2">
+        <h1 className="text-2xl font-semibold">Progress</h1>
+        <Link to="/week" className="text-sm text-neutral-500 underline">
+          Week and month plan
+        </Link>
+      </div>
       {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
       <RecordMetric exercises={data.exercises} onSaved={() => setVersion((v) => v + 1)} />
 

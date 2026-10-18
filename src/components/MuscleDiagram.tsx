@@ -49,7 +49,19 @@ const BACK: Record<string, Shape[]> = {
   feet: mirror([{ e: [40, 173.5, 4.2, 2.8] }]),
 }
 
-function Body({ shapes, level, dx, label }: { shapes: Record<string, Shape[]>; level: Record<string, number>; dx: number; label: string }) {
+function Body({
+  shapes,
+  level,
+  colors,
+  dx,
+  label,
+}: {
+  shapes: Record<string, Shape[]>
+  level: Record<string, number>
+  colors?: Record<string, { fill: string; title: string }>
+  dx: number
+  label: string
+}) {
   const draw = (s: Shape, key: string, fill: string, title: string) =>
     'e' in s ? (
       <ellipse key={key} cx={s.e[0]} cy={s.e[1]} rx={s.e[2]} ry={s.e[3]} fill={fill}>
@@ -86,8 +98,9 @@ function Body({ shapes, level, dx, label }: { shapes: Record<string, Shape[]>; l
       </g>
       {Object.entries(shapes).flatMap(([muscle, list]) => {
         const v = level[muscle] ?? 0
-        const fill = v > 0 ? `color-mix(in srgb, var(--series-1) ${Math.round(25 + 75 * v)}%, var(--body-muscle))` : 'var(--body-muscle)'
-        return list.map((s, i) => draw(s, `${muscle}-${i}`, fill, muscle))
+        const own = colors?.[muscle]
+        const fill = own ? own.fill : v > 0 ? `color-mix(in srgb, var(--series-1) ${Math.round(25 + 75 * v)}%, var(--body-muscle))` : 'var(--body-muscle)'
+        return list.map((s, i) => draw(s, `${muscle}-${i}`, fill, own?.title ?? muscle))
       })}
 
       <text x={50} y={186} textAnchor="middle" fontSize={7} fill="var(--chart-ink)" stroke="none">
@@ -99,12 +112,15 @@ function Body({ shapes, level, dx, label }: { shapes: Record<string, Shape[]>; l
 
 export function MuscleDiagram({
   level,
+  colors,
   label,
   className = 'w-full max-w-xs',
   children,
 }: {
   /** 0-1 per muscle name. */
   level: Record<string, number>
+  /** A fill and tooltip per diagram region, used instead of `level` where given. */
+  colors?: Record<string, { fill: string; title: string }>
   label: string
   className?: string
   children?: ReactNode
@@ -114,8 +130,8 @@ export function MuscleDiagram({
   return (
     <figure className={className}>
       <svg viewBox="0 0 210 190" role="img" aria-label={label} className="w-full">
-        <Body shapes={FRONT} level={regions} dx={0} label="Front" />
-        <Body shapes={BACK} level={regions} dx={110} label="Back" />
+        <Body shapes={FRONT} level={regions} colors={colors} dx={0} label="Front" />
+        <Body shapes={BACK} level={regions} colors={colors} dx={110} label="Back" />
         {cardio && (
           <path
             d="M44 38 c-2 -3 -6 -2 -6 1.5 c0 3 6 6.5 6 6.5 s6 -3.5 6 -6.5 c0 -3.5 -4 -4.5 -6 -1.5 z"
