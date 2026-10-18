@@ -7,6 +7,14 @@ export interface Series {
   /** CSS color, e.g. var(--series-1) */
   color: string
   points: Point[]
+  /** A projection: drawn dashed, without dots. */
+  dashed?: boolean
+}
+
+/** Day label, with the year when it isn't this year. */
+function dayLabel(iso: string): string {
+  const y = iso.slice(0, 4)
+  return y === String(new Date().getFullYear()) ? formatDay(iso) : `${formatDay(iso)} ’${y.slice(2)}`
 }
 
 const W = 340
@@ -90,11 +98,11 @@ export function LineChart({
           </g>
         ))}
         <text x={PAD.left} y={H - 6} fontSize={10} fill="var(--chart-ink)">
-          {formatDay(dates[0])}
+          {dayLabel(dates[0])}
         </text>
         {dates.length > 1 && (
           <text x={W - PAD.right} y={H - 6} textAnchor="end" fontSize={10} fill="var(--chart-ink)">
-            {formatDay(dates.at(-1)!)}
+            {dayLabel(dates.at(-1)!)}
           </text>
         )}
         {target && (
@@ -122,10 +130,11 @@ export function LineChart({
                 stroke={s.color}
                 strokeWidth={2}
                 strokeLinejoin="round"
-                strokeLinecap="round"
+                strokeLinecap={s.dashed ? 'butt' : 'round'}
+                strokeDasharray={s.dashed ? '6 5' : undefined}
               />
             )}
-            {s.points.map((p) => (
+            {(s.dashed ? s.points.slice(-1) : s.points).map((p) => (
               <circle key={p.x} cx={sx(p.x)} cy={sy(p.y)} r={hover === p.x ? 5 : 4} fill={s.color} strokeWidth={2} className="stroke-white dark:stroke-neutral-900" />
             ))}
           </g>
@@ -134,7 +143,7 @@ export function LineChart({
       </svg>
       {hover && hovered.length > 0 && (
         <div className="pointer-events-none absolute top-0 left-12 rounded-lg border border-neutral-200 bg-white px-2 py-1 text-xs shadow dark:border-neutral-700 dark:bg-neutral-900">
-          <div className="text-neutral-500">{formatDay(hover)}</div>
+          <div className="text-neutral-500">{dayLabel(hover)}</div>
           {hovered.map(({ s, p }) => (
             <div key={s.name} className="flex items-center gap-1.5">
               <span className="h-2 w-2 rounded-full" style={{ background: s.color }} />

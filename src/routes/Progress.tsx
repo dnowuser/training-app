@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { Link } from 'react-router'
+import { FeatOutlook } from '../components/FeatOutlook'
 import { LineChart } from '../components/LineChart'
 import { check, logChange } from '../lib/api'
 import { addDays, formatDay, localISODate, startOfWeek } from '../lib/dates'
@@ -67,6 +68,9 @@ export function ProgressScreen() {
       </div>
       {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
       <RecordMetric exercises={data.exercises} onSaved={() => setVersion((v) => v + 1)} />
+
+      <Heading>Feat outlook</Heading>
+      <FeatOutlook />
 
       <Heading>Lifts</Heading>
       {LIFTS.map((lift) => {
