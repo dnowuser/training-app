@@ -60,6 +60,11 @@ describe('accessory progression', () => {
     }
     expect(describeLastTime(last)).toBe('25 lb × 15, 14 · RPE 8.5')
   })
+
+  it('shows a timed block without load or reps', () => {
+    const last = { date: '2026-10-11', sets: [{ ...set({}), seconds: 180, load_lb: undefined, reps: undefined } as unknown as PastSet] }
+    expect(describeLastTime(last)).toBe('180 s')
+  })
 })
 
 describe('ladder readiness', () => {

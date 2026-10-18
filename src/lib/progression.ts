@@ -108,17 +108,17 @@ export function describeLastTime(session: PastSession): string {
   const work = session.sets.filter((s) => !s.is_warmup)
   if (!work.length) return 'done'
   const loads = new Set(work.map((s) => s.load_lb))
-  const sameLoad = loads.size === 1 && work[0].load_lb !== null
+  const sameLoad = loads.size === 1 && work[0].load_lb != null
   const each = work.map((s) => {
     const parts: string[] = []
-    if (!sameLoad && s.load_lb !== null) parts.push(`${Number(s.load_lb)} lb`)
-    if (s.reps !== null) parts.push(sameLoad || s.load_lb === null ? `${s.reps}` : `× ${s.reps}`)
-    if (s.seconds !== null) parts.push(`${Number(s.seconds)} s`)
-    if (s.distance_m !== null && s.seconds === null) parts.push(`${Number(s.distance_m)} m`)
+    if (!sameLoad && s.load_lb != null) parts.push(`${Number(s.load_lb)} lb`)
+    if (s.reps != null) parts.push(sameLoad || s.load_lb == null ? `${s.reps}` : `× ${s.reps}`)
+    if (s.seconds != null) parts.push(`${Number(s.seconds)} s`)
+    if (s.distance_m != null && s.seconds == null) parts.push(`${Number(s.distance_m)} m`)
     return parts.join(' ') || '✓'
   })
   const head = sameLoad ? `${Number(work[0].load_lb)} lb × ` : ''
-  const rpes = work.map((s) => s.rpe).filter((r): r is number => r !== null)
+  const rpes = work.map((s) => s.rpe).filter((r): r is number => r != null)
   const rpe = rpes.length ? ` · RPE ${Math.max(...rpes)}` : ''
   return `${head}${each.join(', ')}${rpe}`
 }

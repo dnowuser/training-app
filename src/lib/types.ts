@@ -55,6 +55,8 @@ export interface Exercise {
   feat_id: string | null
   /** Muscles (or areas, for stretches) it works. */
   muscles: string[]
+  /** Drills that belong together (e.g. "Foot work"); the day view folds them under one header. */
+  group_name: string | null
 }
 
 /** A feat an exercise builds toward (exercise_feats). */
@@ -229,4 +231,13 @@ export interface FeatProgress {
   steps_done: number
   current_step: number | null
   current_step_description: string | null
+}
+
+/** Whether a note has been dealt with (note_status). No row means the note is open. */
+export interface NoteStatus {
+  id: string
+  source: 'session' | 'set' | 'milestone'
+  source_id: string
+  done_on: string | null
+  response: string | null
 }

@@ -31,7 +31,7 @@ const MEASURE_LABELS: Record<Measure, string> = {
 }
 
 // Old combined blocks, replaced by the individual exercises; hidden from the library.
-const RETIRED = new Set(['mobility-a', 'mobility-b', 'long-holds', 'yin-long-holds'])
+const RETIRED = new Set(['mobility-a', 'mobility-b', 'long-holds', 'yin-long-holds', 'foot-work', 'reactive-jumps'])
 
 export function Chips({ items, tone = 'neutral' }: { items: string[]; tone?: 'neutral' | 'violet' }) {
   const color =
