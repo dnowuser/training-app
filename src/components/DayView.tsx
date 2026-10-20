@@ -614,7 +614,6 @@ function SessionView({
       <div className="mt-2 flex flex-wrap gap-1.5 text-xs">
         {session.week && <Badge>Week {session.week}</Badge>}
         {session.is_deload && <Badge tone="amber">Deload</Badge>}
-        <Badge>{session.day_type[0].toUpperCase() + session.day_type.slice(1)}</Badge>
         {session.slot?.mobility && <Badge>Mobility {session.slot.mobility}</Badge>}
         {finished && <Badge tone="emerald">{session.status === 'done' ? 'Done' : 'Partial'}</Badge>}
       </div>
