@@ -18,7 +18,7 @@ export function PrescriptionForm({
   initial: Prescription
   initialNotes?: string
   askReason?: boolean
-  onSave: (p: Prescription, notes: string, reason: string) => void
+  onSave: (p: Prescription, notes: string, reason: string) => void | Promise<void>
   onCancel: () => void
   saveLabel?: string
 }) {
@@ -27,13 +27,17 @@ export function PrescriptionForm({
   const [reason, setReason] = useState('')
   const [showAll, setShowAll] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // One save at a time, so a double tap doesn't save twice.
+  const [saving, setSaving] = useState(false)
 
   const result = fromFormValues(form, initial)
   const visible = NUMBER_FIELDS.filter(([key]) => showAll || toFormValues(initial).numbers[key] !== '' || form.numbers[key] !== '')
 
   function submit() {
     if (typeof result === 'string') return setError(result)
-    onSave(result, notes.trim(), reason.trim())
+    if (saving) return
+    setSaving(true)
+    void Promise.resolve(onSave(result, notes.trim(), reason.trim())).finally(() => setSaving(false))
   }
 
   return (
@@ -84,7 +88,7 @@ export function PrescriptionForm({
       </label>
       {askReason && (
         <label className="block text-sm">
-          <span className="text-neutral-500">Why (for the change log, optional)</span>
+          <span className="text-neutral-500">Note for Claude (saved to your notes, optional)</span>
           <input className={input} value={reason} onChange={(e) => setReason(e.target.value)} />
         </label>
       )}
@@ -96,8 +100,8 @@ export function PrescriptionForm({
         <button type="button" onClick={onCancel} className="h-12 flex-1 rounded-xl bg-neutral-100 font-medium dark:bg-neutral-800">
           Cancel
         </button>
-        <button type="button" onClick={submit} className="h-12 flex-1 rounded-xl bg-emerald-600 font-semibold text-white">
-          {saveLabel}
+        <button type="button" onClick={submit} disabled={saving} className="h-12 flex-1 rounded-xl bg-emerald-600 font-semibold text-white disabled:opacity-60">
+          {saving ? 'Saving…' : saveLabel}
         </button>
       </div>
     </div>
