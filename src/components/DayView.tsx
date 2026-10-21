@@ -11,6 +11,7 @@ import {
   setSkipped,
   updateSession,
   updateSessionExercise,
+  updateSessionNotes,
   updateSet,
   updateSetRpe,
   type Day,
@@ -328,9 +329,14 @@ function SessionView({
     setDay((d) => d && { ...d, sessions: d.sessions.map((s) => (s.id === next.id ? next : s)) })
   const patchSets = (fn: (sets: LoggedSet[]) => LoggedSet[]) => setDay((d) => d && { ...d, sets: fn(d.sets) })
 
-  // Every row of every exercise that isn't skipped, in order; the first unlogged one is "next".
+  // Every work row of every exercise that isn't skipped, in order; the first unlogged one is "next".
+  // Warm-up sets are optional: they're folded away and don't count toward what's left.
   const allRows = items.flatMap((item) =>
-    item.skipped ? [] : rowsFor(item, setsFor(item.id), day.trainingMaxes.get(item.exercise_id)).map((r) => ({ item, r })),
+    item.skipped
+      ? []
+      : rowsFor(item, setsFor(item.id), day.trainingMaxes.get(item.exercise_id))
+          .filter((r) => !r.planned?.isWarmup)
+          .map((r) => ({ item, r })),
   )
   const next = allRows.find(({ r }) => r.planned && !r.logged)
   const nextKey = next && rowKey(next.item.id, next.r.setNumber)
@@ -492,14 +498,18 @@ function SessionView({
 
   async function editItem(shown: DayExercise, prescription: DayExercise['prescription'], notes: string, reason: string) {
     const item = stored.get(shown.id) ?? shown
-    if (JSON.stringify(prescription) === JSON.stringify(item.prescription) && (notes || null) === item.notes) {
-      setEditingItem(null)
-      return
-    }
+    const changed = JSON.stringify(prescription) !== JSON.stringify(item.prescription) || (notes || null) !== item.notes
     try {
-      await updateSessionExercise(db, item, session, { prescription, notes: notes || null }, reason)
+      if (changed) await updateSessionExercise(db, item, session, { prescription, notes: notes || null }, reason)
+      // A note typed here is a request: keep it with the day's notes so it shows in Notes and on the day.
+      if (reason) {
+        const line = `${item.exercise.name}: ${reason}`
+        const next = session.notes ? `${session.notes}\n\n${line}` : line
+        await updateSessionNotes(db, session.id, next)
+        patchSession({ ...session, notes: next })
+      }
       setEditingItem(null)
-      reload()
+      if (changed) reload()
     } catch (e) {
       report(e)
     }
@@ -556,7 +566,7 @@ function SessionView({
   const [openOverride, setOpenOverride] = useState<Record<string, boolean>>({})
   const rowsOf = (item: DayExercise) => rowsFor(item, setsFor(item.id), day.trainingMaxes.get(item.exercise_id))
   const progress = (list: DayExercise[]) => {
-    const rows = list.filter((it) => !it.skipped).flatMap((it) => rowsOf(it).filter((r) => r.planned))
+    const rows = list.filter((it) => !it.skipped).flatMap((it) => rowsOf(it).filter((r) => r.planned && !r.planned.isWarmup))
     return { done: rows.filter((r) => r.logged).length, total: rows.length }
   }
   const complete = (list: DayExercise[]) => {
@@ -598,7 +608,7 @@ function SessionView({
             initialNotes={item.notes ?? ''}
             askReason
             onCancel={() => setEditingItem(null)}
-            onSave={(p, notes, reason) => void editItem(item, p, notes, reason)}
+            onSave={(p, notes, reason) => editItem(item, p, notes, reason)}
           />
           <button type="button" onClick={() => void removeItem(item)} className="mt-3 text-sm text-red-600 underline">
             Remove from this day
@@ -802,6 +812,9 @@ function ExerciseCard({
 }) {
   const p = item.prescription
   const [showMuscles, setShowMuscles] = useState(false)
+  // Tap the name to fold the whole card; warm-ups stay folded unless opened.
+  const [collapsed, setCollapsed] = useState(false)
+  const [showWarmups, setShowWarmups] = useState(false)
   const last = history[0]
   const suggestion = MEASURE_FIELDS[item.exercise.measure].includes('load_lb') ? nextLoad(p, last) : null
   // RPE is asked for on work sets, not warm-ups, timed blocks or mobility.
@@ -814,7 +827,7 @@ function ExerciseCard({
   const extraKey = rowKey(item.id, Math.max(0, ...rows.map((r) => r.setNumber)) + 1)
   // The set that's open for editing on this card: the session's next set if it's here,
   // or the next one on an exercise you've already started (so working out of order still works).
-  const firstOpen = rows.find((r) => r.planned && !r.logged)
+  const firstOpen = rows.find((r) => r.planned && !r.logged && !r.planned.isWarmup)
   const started = rows.some((r) => r.logged)
   // Tapping the open set's header folds it to a one-line row like the others.
   const [folded, setFolded] = useState<string | null>(null)
@@ -839,8 +852,13 @@ function ExerciseCard({
       <header className="flex items-start gap-2">
         <div className="min-w-0 flex-1">
           <h3 className="text-lg leading-snug font-semibold">
-            {item.exercise.name}
-            {allLogged && !item.skipped && <span className="ml-1.5 text-emerald-600">✓</span>}
+            <button type="button" onClick={() => setCollapsed(!collapsed)} aria-expanded={!collapsed} className="text-left">
+              {item.exercise.name}
+              {allLogged && !item.skipped && <span className="ml-1.5 text-emerald-600">✓</span>}
+              <span aria-hidden className={`ml-1.5 inline-block text-sm text-neutral-400 transition-transform ${collapsed ? '' : 'rotate-90'}`}>
+                ›
+              </span>
+            </button>
           </h3>
           <p className="text-sm text-neutral-600 dark:text-neutral-300">{describePrescription(p, tm)}</p>
           {usesTm && (
@@ -858,6 +876,8 @@ function ExerciseCard({
           </button>
         </div>
       </header>
+      {!collapsed && (
+        <>
       {item.notes && <p className="mt-1 text-sm">{item.notes}</p>}
       {(item.exercise.muscles?.length > 0 || feats.length > 0) && (
         <p className="mt-2 text-xs leading-relaxed">
@@ -901,7 +921,24 @@ function ExerciseCard({
 
       {!item.skipped && (
         <ul className="mt-3 space-y-2">
-          {rows.map((row) => {
+          {warmups > 0 && (
+            <li>
+              <button
+                type="button"
+                onClick={() => setShowWarmups(!showWarmups)}
+                aria-expanded={showWarmups}
+                className="flex w-full items-center gap-1 rounded-xl px-3 py-1.5 text-left text-xs text-neutral-500 active:bg-neutral-100 dark:active:bg-neutral-800"
+              >
+                <span className={`inline-block transition-transform ${showWarmups ? 'rotate-90' : ''}`}>›</span>
+                Warm-ups ({rows.filter((r) => r.planned?.isWarmup && r.logged).length}/{warmups}):{' '}
+                {rows
+                  .filter((r) => r.planned?.isWarmup)
+                  .map((r) => describeTarget(r.planned!))
+                  .join(' · ')}
+              </button>
+            </li>
+          )}
+          {rows.filter((row) => showWarmups || !row.planned?.isWarmup).map((row) => {
             const key = rowKey(item.id, row.setNumber)
             const defaults = row.planned
               ? timed
@@ -999,6 +1036,8 @@ function ExerciseCard({
             )
           )}
         </ul>
+      )}
+        </>
       )}
     </article>
   )
