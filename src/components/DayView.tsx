@@ -825,16 +825,16 @@ function ExerciseCard({
   const allLogged = rows.every((r) => r.logged)
   const warmups = rows.filter((r) => r.planned?.isWarmup).length
   const extraKey = rowKey(item.id, Math.max(0, ...rows.map((r) => r.setNumber)) + 1)
-  // The set that's open for editing on this card: the session's next set if it's here,
-  // or the next one on an exercise you've already started (so working out of order still works).
+  // The first set of the exercise you're on opens on the card. Once a set is checked,
+  // the rest stay one-line rows (tap one to open it).
   const firstOpen = rows.find((r) => r.planned && !r.logged && !r.planned.isWarmup)
   const started = rows.some((r) => r.logged)
   // Tapping the open set's header folds it to a one-line row like the others.
   const [folded, setFolded] = useState<string | null>(null)
   const activeKey =
-    timed || !firstOpen
+    timed || !firstOpen || started
       ? undefined
-      : focused || nextKey?.startsWith(`${item.id}:`) || started
+      : focused || nextKey?.startsWith(`${item.id}:`)
         ? rowKey(item.id, firstOpen.setNumber)
         : undefined
 
