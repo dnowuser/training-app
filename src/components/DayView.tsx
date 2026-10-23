@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { Link } from 'react-router'
 import {
   addSession,
@@ -594,15 +594,13 @@ function SessionView({
         onDelete={(set) => void remove(set)}
         onUncheck={(set) => void remove(set, false)}
         onSkip={() => void toggleSkip(item)}
-        onEdit={() => setEditingItem(item)}
+        onEdit={() => setEditingItem(editingItem?.id === item.id ? null : item)}
+        isEditing={editingItem?.id === item.id}
         ladder={item.exercise.feat_id ? day.ladders[item.exercise.feat_id] : undefined}
         onAdvanced={reload}
       />
       {editingItem?.id === item.id && (
-        <div className="mb-3 rounded-2xl border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900">
-          <p className="mb-2 text-sm text-neutral-500">
-            Change {item.exercise.name} for this day only. To change it every week, use Plan.
-          </p>
+        <EditPanel name={item.exercise.name} onClose={() => setEditingItem(null)}>
           <PrescriptionForm
             initial={stored.get(item.id)?.prescription ?? item.prescription}
             initialNotes={item.notes ?? ''}
@@ -613,7 +611,7 @@ function SessionView({
           <button type="button" onClick={() => void removeItem(item)} className="mt-3 text-sm text-red-600 underline">
             Remove from this day
           </button>
-        </div>
+        </EditPanel>
       )}
     </div>
   )
@@ -785,6 +783,7 @@ function ExerciseCard({
   onUncheck,
   onSkip,
   onEdit,
+  isEditing,
   ladder,
   onAdvanced,
   onRpe,
@@ -807,13 +806,14 @@ function ExerciseCard({
   onUncheck: (set: LoggedSet) => void
   onSkip: () => void
   onEdit: () => void
+  isEditing: boolean
   ladder?: Ladder
   onAdvanced: () => void
 }) {
   const p = item.prescription
   const [showMuscles, setShowMuscles] = useState(false)
   // Tap the name to fold the whole card; warm-ups stay folded unless opened.
-  const [collapsed, setCollapsed] = useState(false)
+  const [collapsed, setCollapsed] = useState(() => rows.some((r) => !r.planned?.isWarmup) && rows.every((r) => r.planned?.isWarmup || r.logged))
   const [showWarmups, setShowWarmups] = useState(false)
   const last = history[0]
   const suggestion = MEASURE_FIELDS[item.exercise.measure].includes('load_lb') ? nextLoad(p, last) : null
@@ -823,6 +823,14 @@ function ExerciseCard({
   const usesTm = p.scheme === 'ladder' || p.pct_tm !== undefined
   const timed = isTimedBlock(p)
   const allLogged = rows.every((r) => r.logged)
+  // Done once every work set is in (warm-ups are optional); the card folds itself then.
+  const workRows = rows.filter((r) => !r.planned?.isWarmup)
+  const done = workRows.length > 0 && workRows.every((r) => r.logged)
+  const [wasDone, setWasDone] = useState(done)
+  if (done !== wasDone) {
+    setWasDone(done)
+    setCollapsed(done)
+  }
   const warmups = rows.filter((r) => r.planned?.isWarmup).length
   const extraKey = rowKey(item.id, Math.max(0, ...rows.map((r) => r.setNumber)) + 1)
   // The first set of the exercise you're on opens on the card. Once a set is checked,
@@ -871,8 +879,13 @@ function ExerciseCard({
           <button type="button" onClick={onSkip} className="px-2 py-1 text-xs text-neutral-500 underline">
             {item.skipped ? 'Unskip' : 'Skip'}
           </button>
-          <button type="button" onClick={onEdit} className="px-2 py-1 text-xs text-neutral-500 underline">
-            Edit
+          <button
+            type="button"
+            onClick={onEdit}
+            aria-expanded={isEditing}
+            className={`px-2 py-1 text-xs underline ${isEditing ? 'font-semibold text-emerald-700 dark:text-emerald-400' : 'text-neutral-500'}`}
+          >
+            {isEditing ? 'Editing ↓' : 'Edit'}
           </button>
         </div>
       </header>
@@ -1513,5 +1526,29 @@ function SetEditor({
         </button>
       </div>
     </div>
+  )
+}
+
+/** The one-off edit form for an exercise: scrolls into view and stands out, so it's clear it opened. */
+function EditPanel({ name, onClose, children }: { name: string; onClose: () => void; children: ReactNode }) {
+  const ref = useRef<HTMLElement>(null)
+  useEffect(() => ref.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), [])
+  return (
+    <section
+      ref={ref}
+      aria-label={`Edit ${name}`}
+      className="mb-3 scroll-mt-4 rounded-2xl border-2 border-emerald-500 bg-emerald-50 p-4 dark:bg-emerald-950/40"
+    >
+      <header className="mb-2 flex items-start gap-2">
+        <div className="flex-1">
+          <h3 className="font-semibold">Editing {name}</h3>
+          <p className="text-sm text-neutral-600 dark:text-neutral-300">For this day only. To change it every week, use Plan.</p>
+        </div>
+        <button type="button" onClick={onClose} aria-label="Close the edit form" className="-m-2 p-2 text-xl leading-none text-neutral-500">
+          ×
+        </button>
+      </header>
+      {children}
+    </section>
   )
 }
