@@ -45,6 +45,7 @@ export function RestTimerProvider({ children }: { children: ReactNode }) {
       start: (seconds) => {
         // Created inside the tap that logged the set, so iOS lets it play later.
         try {
+          mixWithOtherAudio()
           audio.current ??= new AudioContext()
           void audio.current.resume()
         } catch {
@@ -74,9 +75,20 @@ export function RestTimerProvider({ children }: { children: ReactNode }) {
   return <RestTimerContext.Provider value={timer}>{children}</RestTimerContext.Provider>
 }
 
+/**
+ * Safari's Audio Session API: "ambient" plays the beep over music from other apps
+ * instead of pausing it (the default "playback" stops Spotify). Older browsers skip it.
+ */
+function mixWithOtherAudio() {
+  const session = (navigator as Navigator & { audioSession?: { type: string } }).audioSession
+  if (session && session.type !== 'ambient') session.type = 'ambient'
+}
+
 function beep(ctx: AudioContext | null) {
   if (!ctx) return
   try {
+    mixWithOtherAudio()
+    void ctx.resume()
     for (const at of [0, 0.25]) {
       const osc = ctx.createOscillator()
       const gain = ctx.createGain()
@@ -87,6 +99,8 @@ function beep(ctx: AudioContext | null) {
       osc.start(ctx.currentTime + at)
       osc.stop(ctx.currentTime + at + 0.2)
     }
+    // Let go of the audio session between rests.
+    setTimeout(() => void ctx.suspend().catch(() => undefined), 800)
   } catch {
     // No sound is fine; the bar still disappears.
   }
