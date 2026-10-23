@@ -8,6 +8,9 @@ export interface RestTimer {
   start: (seconds: number) => void
   add: (seconds: number) => void
   stop: () => void
+  /** Beep when the rest ends. Off by default: on iPhone the beep can pause music from other apps. */
+  sound: boolean
+  setSound: (on: boolean) => void
 }
 
 export const RestTimerContext = createContext<RestTimer | null>(null)
