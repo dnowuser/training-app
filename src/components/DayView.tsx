@@ -496,6 +496,19 @@ function SessionView({
     )
   }
 
+  /** A note typed on a card joins the day's notes as "Exercise: note", like one from the Edit form. */
+  async function addNote(item: DayExercise, text: string) {
+    const line = `${item.exercise.name}: ${text}`
+    const next = session.notes ? `${session.notes}\n\n${line}` : line
+    await act(
+      async () => {
+        await updateSessionNotes(db, session.id, next)
+        patchSession({ ...session, notes: next })
+      },
+      () => patchSessionLater({ notes: next }),
+    )
+  }
+
   async function editItem(shown: DayExercise, prescription: DayExercise['prescription'], notes: string, reason: string) {
     const item = stored.get(shown.id) ?? shown
     const changed = JSON.stringify(prescription) !== JSON.stringify(item.prescription) || (notes || null) !== item.notes
@@ -596,6 +609,8 @@ function SessionView({
         onSkip={() => void toggleSkip(item)}
         onEdit={() => setEditingItem(editingItem?.id === item.id ? null : item)}
         isEditing={editingItem?.id === item.id}
+        notes={notesFor(session.notes, item.exercise.name)}
+        onNote={(text) => addNote(item, text)}
         ladder={item.exercise.feat_id ? day.ladders[item.exercise.feat_id] : undefined}
         onAdvanced={reload}
       />
@@ -784,6 +799,8 @@ function ExerciseCard({
   onSkip,
   onEdit,
   isEditing,
+  notes,
+  onNote,
   ladder,
   onAdvanced,
   onRpe,
@@ -807,6 +824,8 @@ function ExerciseCard({
   onSkip: () => void
   onEdit: () => void
   isEditing: boolean
+  notes: string[]
+  onNote: (text: string) => Promise<void>
   ladder?: Ladder
   onAdvanced: () => void
 }) {
@@ -1052,6 +1071,7 @@ function ExerciseCard({
       )}
         </>
       )}
+      <NoteBar name={item.exercise.name} notes={notes} onNote={onNote} />
     </article>
   )
 }
@@ -1550,5 +1570,63 @@ function EditPanel({ name, onClose, children }: { name: string; onClose: () => v
       </header>
       {children}
     </section>
+  )
+}
+
+/** This exercise's lines from the day's notes ("Exercise: note"), newest last. */
+function notesFor(dayNotes: string | null, name: string): string[] {
+  const prefix = `${name}: `
+  return (dayNotes ?? '')
+    .split(/\n\s*\n/)
+    .map((p) => p.trim())
+    .filter((p) => p.startsWith(prefix))
+    .map((p) => p.slice(prefix.length))
+}
+
+/** A note box on every card: type a note for Claude and save it without opening Edit. */
+function NoteBar({ name, notes, onNote }: { name: string; notes: string[]; onNote: (text: string) => Promise<void> }) {
+  const [text, setText] = useState('')
+  const [saving, setSaving] = useState(false)
+  async function save() {
+    const t = text.trim()
+    if (!t || saving) return
+    setSaving(true)
+    try {
+      await onNote(t)
+      setText('')
+    } finally {
+      setSaving(false)
+    }
+  }
+  return (
+    <div className="mt-3">
+      {notes.map((n, i) => (
+        <p key={i} className="mb-1 rounded-lg bg-amber-500/10 px-3 py-1.5 text-sm">
+          <span className="text-neutral-500">Your note: </span>
+          {n}
+        </p>
+      ))}
+      <form
+        className="flex gap-2"
+        onSubmit={(e) => {
+          e.preventDefault()
+          void save()
+        }}
+      >
+        <input
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          placeholder="Note for Claude…"
+          aria-label={`Note about ${name}`}
+          enterKeyHint="send"
+          className="h-10 min-w-0 flex-1 rounded-lg border border-neutral-200 bg-transparent px-3 text-sm dark:border-neutral-700"
+        />
+        {text.trim() && (
+          <button type="submit" disabled={saving} className="h-10 rounded-lg bg-emerald-600 px-3 text-sm font-semibold text-white disabled:opacity-60">
+            Save
+          </button>
+        )}
+      </form>
+    </div>
   )
 }
