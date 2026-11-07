@@ -43,9 +43,9 @@ Move up a step after three straight sessions at target, and keep the same exerci
 
 ### Lifting: 315 squat, 315 bench, 405 deadlift
 
-- **Weekly (from Oct 18, 2026):** bench Sun, Tue and Fri; squat Mon and Sat; deadlift Wed.
-- **Ladder:** warm-ups 33% x 10 and 56% x 10, then 79% x 5, 86% x 3, 91% x 1, 96% x 1, 91% x 1, 91% x 1, stopping after the singles. Tuesday bench is the light day: warm-ups, then 3 singles at 91%, no 96%.
-- **Progression:** after every heavy session the training max adjusts from how the 96% single felt (RPE logged per set): easy (RPE 7 or less) adds 5 lb to bench or 10 lb to squat and deadlift, solid (7.5–8.5) adds half that, hard (9–9.5) holds, and a max effort or miss drops half a step. The light Tuesday doesn't move it.
+- **Weekly (from Nov 7, 2026):** 5 lifting days. Tue and Sat posterior (deadlift), Sun and Wed anterior (squat, then bench), Fri arms, shoulders, traps and bench. Mon is jumps and sprints, Thu an easy run. Bench Sun, Wed and Fri; squat Sun and Wed; deadlift Tue and Sat.
+- **Ladder:** warm-ups 33% x 10 and 56% x 10, then 79% x 5, 86% x 3, 91% x 1, 96% x 1, 91% x 1, 91% x 1, stopping after the singles. Every bench, squat and deadlift session is the full ladder (Wayson's choice, Nov 2026).
+- **Progression:** after every heavy session the training max adjusts from how the 96% single felt (RPE logged per set): easy (RPE 7 or less) adds 5 lb to bench or 10 lb to squat and deadlift, solid (7.5–8.5) adds half that, hard (9–9.5) holds, and a max effort or miss drops half a step.
 - **Milestones:** every 20 lb from the current max up to the target.
 
 ### Jumping: one-hand dunk, then two-hand dunk
