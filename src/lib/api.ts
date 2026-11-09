@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { addDays } from './dates'
 import { latestTrainingMaxes, type SetValues } from './logging'
 import { groupHistory, type PastSession, type PastSet } from './progression'
 import type { Exercise, FeatRef, FeatStep, LoggedSet, Session, SessionExercise } from './types'
@@ -288,6 +289,37 @@ export async function updateSessionExercise(
     reason,
     affects_from: session.date,
     details: { session_exercise_id: item.id, before: item.prescription, after: patch.prescription },
+  })
+}
+
+/**
+ * Swap an exercise for another one on this day, keeping its prescription. With
+ * `everyWeek`, the weekly plan's item changes too and planned days from this one
+ * on are rebuilt (days already started or edited keep what they have).
+ */
+export async function swapSessionExercise(
+  db: SupabaseClient,
+  item: DayExercise,
+  session: Session,
+  to: Exercise,
+  everyWeek: boolean,
+): Promise<void> {
+  check(await db.from('session_exercises').update({ exercise_id: to.id }).eq('id', item.id))
+  await markCustomized(db, session.id)
+  if (everyWeek && item.template_item_id) {
+    check(await db.from('template_items').update({ exercise_id: to.id }).eq('id', item.template_item_id))
+    // The end of what's generated from the plan (as plan.ts generatedUntil).
+    const until = check<{ date: string }[]>(
+      await db.from('sessions').select('date').not('slot_id', 'is', null).order('date', { ascending: false }).limit(1),
+    )[0]?.date
+    if (until && until > session.date) {
+      check(await db.rpc('regenerate_sessions', { p_from: addDays(session.date, 1), p_to: until }))
+    }
+  }
+  await logChange(db, {
+    summary: `${item.exercise.name} swapped for ${to.name} ${everyWeek ? 'from' : 'on'} ${session.date}${everyWeek ? ' on, every week' : ' only'}`,
+    affects_from: session.date,
+    details: { session_exercise_id: item.id, template_item_id: everyWeek ? item.template_item_id : null, from: item.exercise.slug, to: to.slug },
   })
 }
 
