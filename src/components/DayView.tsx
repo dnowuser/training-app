@@ -862,6 +862,10 @@ function ExerciseCard({
 }) {
   const p = item.prescription
   const [showMuscles, setShowMuscles] = useState(false)
+  // Only the sets show by default: how-to, muscles and last time sit behind ⓘ, the note box behind ✎, Skip/Swap/Edit behind ⋯.
+  const [showInfo, setShowInfo] = useState(false)
+  const [showNote, setShowNote] = useState(false)
+  const [showActions, setShowActions] = useState(false)
   // Tap the name to fold the whole card; warm-ups stay folded unless opened.
   const [collapsed, setCollapsed] = useState(() => rows.some((r) => !r.planned?.isWarmup) && rows.every((r) => r.planned?.isWarmup || r.logged))
   const [showWarmups, setShowWarmups] = useState(false)
@@ -919,39 +923,39 @@ function ExerciseCard({
             </button>
           </h3>
           <p className="text-sm text-neutral-600 dark:text-neutral-300">{describePrescription(p, tm)}</p>
-          {usesTm && (
-            <p className="text-xs text-neutral-500">
-              {tm ? `Training max ${tm} lb` : 'No training max recorded: loads are blank'}
-            </p>
-          )}
         </div>
-        <div className="flex shrink-0 flex-col items-end">
-          <button type="button" onClick={onSkip} className="px-2 py-1 text-xs text-neutral-500 underline">
-            {item.skipped ? 'Unskip' : 'Skip'}
-          </button>
-          <button
-            type="button"
-            onClick={onSwap}
-            aria-expanded={isSwapping}
-            className={`px-2 py-1 text-xs underline ${isSwapping ? 'font-semibold text-emerald-700 dark:text-emerald-400' : 'text-neutral-500'}`}
-          >
-            {isSwapping ? 'Swapping ↓' : 'Swap'}
-          </button>
-          <button
-            type="button"
-            onClick={onEdit}
-            aria-expanded={isEditing}
-            className={`px-2 py-1 text-xs underline ${isEditing ? 'font-semibold text-emerald-700 dark:text-emerald-400' : 'text-neutral-500'}`}
-          >
-            {isEditing ? 'Editing ↓' : 'Edit'}
-          </button>
+        <div className="-mt-1 -mr-2 flex shrink-0">
+          <CardIcon label={`How to do ${item.exercise.name}`} pressed={showInfo} onClick={() => setShowInfo(!showInfo)} d={ICON_INFO} />
+          <CardIcon label={`Note about ${item.exercise.name}`} pressed={showNote} onClick={() => setShowNote(!showNote)} d={ICON_NOTE} />
+          <CardIcon
+            label={`More options for ${item.exercise.name}`}
+            pressed={showActions || isEditing || isSwapping}
+            onClick={() => setShowActions(!showActions)}
+            d={ICON_MORE}
+          />
         </div>
       </header>
+      {(showActions || isEditing || isSwapping) && (
+        <div className="mt-2 flex gap-2">
+          <CardAction onClick={onSkip}>{item.skipped ? 'Unskip' : 'Skip'}</CardAction>
+          <CardAction onClick={onSwap} active={isSwapping}>
+            Swap
+          </CardAction>
+          <CardAction onClick={onEdit} active={isEditing}>
+            Edit
+          </CardAction>
+        </div>
+      )}
       {!collapsed && (
         <>
       {item.notes && <p className="mt-1 text-sm">{item.notes}</p>}
+      {showInfo && (
+        <div className="mt-2 space-y-2">
+          {usesTm && (
+            <p className="text-xs text-neutral-500">{tm ? `Training max ${tm} lb` : 'No training max recorded: loads are blank'}</p>
+          )}
       {(item.exercise.muscles?.length > 0 || feats.length > 0) && (
-        <p className="mt-2 text-xs leading-relaxed">
+        <p className="text-xs leading-relaxed">
           {item.exercise.muscles?.length > 0 && (
             <button type="button" onClick={() => setShowMuscles(!showMuscles)} className="text-left text-neutral-500">
               Works {item.exercise.muscles.join(', ')} <span className="underline">{showMuscles ? 'hide' : 'see muscles'}</span>
@@ -978,14 +982,20 @@ function ExerciseCard({
         ) : (
           <MuscleDiagram level={exerciseLevels(item.exercise.muscles)} label={`Muscles ${item.exercise.name} works`} className="mx-auto mt-2 w-full max-w-[16rem]" />
         ))}
-      {item.exercise.cues && <p className="mt-2 text-sm text-neutral-600 dark:text-neutral-300">{item.exercise.cues}</p>}
-      <Link to={`/exercises/${item.exercise.slug}`} className="mt-1 inline-block text-xs text-neutral-500 underline">
+      {item.exercise.cues && <p className="text-sm text-neutral-600 dark:text-neutral-300">{item.exercise.cues}</p>}
+      <Link to={`/exercises/${item.exercise.slug}`} className="inline-block text-xs text-neutral-500 underline">
         More about {item.exercise.name.toLowerCase()}
       </Link>
       {last && (
-        <p className="mt-2 text-sm">
+        <p className="text-sm">
           <span className="text-neutral-500">Last time ({formatShort(last.date)}):</span> {describeLastTime(last)}
-          {suggestion && <span className="block font-medium text-emerald-700 dark:text-emerald-400">Today: {suggestion.load} lb · {suggestion.note}</span>}
+        </p>
+      )}
+        </div>
+      )}
+      {suggestion && (
+        <p className="mt-2 text-sm font-medium text-emerald-700 dark:text-emerald-400">
+          Today: {suggestion.load} lb · {suggestion.note}
         </p>
       )}
       {ladder && <LadderStep ladder={ladder} history={history} onAdvanced={onAdvanced} />}
@@ -1110,7 +1120,7 @@ function ExerciseCard({
       )}
         </>
       )}
-      <NoteBar name={item.exercise.name} notes={notes} onNote={onNote} />
+      {(showNote || notes.length > 0) && <NoteBar name={item.exercise.name} notes={notes} onNote={onNote} open={showNote} onSaved={() => setShowNote(false)} />}
     </article>
   )
 }
@@ -1623,7 +1633,19 @@ function notesFor(dayNotes: string | null, name: string): string[] {
 }
 
 /** A note box on every card: type a note for Claude and save it without opening Edit. */
-function NoteBar({ name, notes, onNote }: { name: string; notes: string[]; onNote: (text: string) => Promise<void> }) {
+function NoteBar({
+  name,
+  notes,
+  onNote,
+  open,
+  onSaved,
+}: {
+  name: string
+  notes: string[]
+  onNote: (text: string) => Promise<void>
+  open: boolean
+  onSaved: () => void
+}) {
   const [text, setText] = useState('')
   const [saving, setSaving] = useState(false)
   async function save() {
@@ -1633,6 +1655,7 @@ function NoteBar({ name, notes, onNote }: { name: string; notes: string[]; onNot
     try {
       await onNote(t)
       setText('')
+      onSaved()
     } finally {
       setSaving(false)
     }
@@ -1645,6 +1668,7 @@ function NoteBar({ name, notes, onNote }: { name: string; notes: string[]; onNot
           {n}
         </p>
       ))}
+      {open && (
       <form
         className="flex gap-2"
         onSubmit={(e) => {
@@ -1657,6 +1681,7 @@ function NoteBar({ name, notes, onNote }: { name: string; notes: string[]; onNot
           onChange={(e) => setText(e.target.value)}
           placeholder="Note for Claude…"
           aria-label={`Note about ${name}`}
+          autoFocus
           enterKeyHint="send"
           className="h-10 min-w-0 flex-1 rounded-lg border border-neutral-200 bg-transparent px-3 text-sm dark:border-neutral-700"
         />
@@ -1666,6 +1691,7 @@ function NoteBar({ name, notes, onNote }: { name: string; notes: string[]; onNot
           </button>
         )}
       </form>
+      )}
     </div>
   )
 }
@@ -1731,5 +1757,39 @@ function SwapPanel({
         </ul>
       )}
     </EditPanel>
+  )
+}
+
+const ICON_INFO = 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 11v5M12 8h.01'
+const ICON_NOTE = 'M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4'
+const ICON_MORE = 'M5 12h.01M12 12h.01M19 12h.01'
+
+/** A small icon button on an exercise card; big enough to hit with a thumb. */
+function CardIcon({ label, pressed, onClick, d }: { label: string; pressed: boolean; onClick: () => void; d: string }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={label}
+      aria-pressed={pressed}
+      className={`grid h-10 w-10 place-items-center rounded-full ${pressed ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400' : 'text-neutral-400 active:bg-neutral-100 dark:active:bg-neutral-800'}`}
+    >
+      <svg viewBox="0 0 24 24" aria-hidden className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={d === ICON_MORE ? 3 : 1.8} strokeLinecap="round" strokeLinejoin="round">
+        <path d={d} />
+      </svg>
+    </button>
+  )
+}
+
+function CardAction({ onClick, active = false, children }: { onClick: () => void; active?: boolean; children: ReactNode }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={`h-9 flex-1 rounded-lg text-sm font-medium ${active ? 'bg-emerald-600 text-white' : 'bg-neutral-100 dark:bg-neutral-800'}`}
+    >
+      {children}
+    </button>
   )
 }
