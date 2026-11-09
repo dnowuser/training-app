@@ -12,6 +12,8 @@ import {
   updateSession,
   updateSessionExercise,
   updateSessionNotes,
+  listExercises,
+  swapSessionExercise,
   updateSet,
   updateSetRpe,
   type Day,
@@ -56,11 +58,12 @@ import { applyTrainingMaxes } from '../lib/finish'
 import { dequeue, enqueue, isNetworkError, pendingSet, QUEUE_EVENT, queuedAsLogged, readQueue } from '../lib/offline'
 import { supabase } from '../lib/supabase'
 import { PrescriptionForm } from './PrescriptionForm'
+import { swapOptions } from '../lib/swap'
 import { AnatomyMap } from './AnatomyMap'
 import { MuscleDiagram } from './MuscleDiagram'
 import { sectionsOf } from '../lib/sections'
 import { SessionOptions } from './SessionOptions'
-import type { Block, FeatRef, LoggedSet } from '../lib/types'
+import type { Block, Exercise, FeatRef, LoggedSet } from '../lib/types'
 
 const BLOCK_LABELS: Record<Block, string> = {
   warmup: 'Warm-up',
@@ -316,6 +319,7 @@ function SessionView({
   const timer = useRestTimer()
   const [editing, setEditing] = useState<string | null>(null)
   const [editingItem, setEditingItem] = useState<DayExercise | null>(null)
+  const [swappingItem, setSwappingItem] = useState<DayExercise | null>(null)
   const [tmNotes, setTmNotes] = useState<string[]>([])
   // The stored prescription stays as planned; the card follows the current ladder step.
   const items = day.exercises
@@ -528,6 +532,18 @@ function SessionView({
     }
   }
 
+  async function swapItem(item: DayExercise, to: Exercise, everyWeek: boolean) {
+    if (setsFor(item.id).length) return onError(`${item.exercise.name} has logged sets. Uncheck them first, or add ${to.name} as its own exercise.`)
+    try {
+      await swapSessionExercise(db, item, session, to, everyWeek)
+      setSwappingItem(null)
+      reload()
+    } catch (e) {
+      if (isNetworkError(e)) onError('Swapping needs signal. Try again once you are back online.')
+      else report(e)
+    }
+  }
+
   async function removeItem(item: DayExercise) {
     if (setsFor(item.id).length) return onError('This exercise has logged sets, so it stays. Skip it instead.')
     if (!window.confirm(`Remove ${item.exercise.name} from this day?`)) return
@@ -609,11 +625,22 @@ function SessionView({
         onSkip={() => void toggleSkip(item)}
         onEdit={() => setEditingItem(editingItem?.id === item.id ? null : item)}
         isEditing={editingItem?.id === item.id}
+        onSwap={() => setSwappingItem(swappingItem?.id === item.id ? null : item)}
+        isSwapping={swappingItem?.id === item.id}
         notes={notesFor(session.notes, item.exercise.name)}
         onNote={(text) => addNote(item, text)}
         ladder={item.exercise.feat_id ? day.ladders[item.exercise.feat_id] : undefined}
         onAdvanced={reload}
       />
+      {swappingItem?.id === item.id && (
+        <SwapPanel
+          item={item}
+          canChangePlan={!!item.template_item_id}
+          hasSets={setsFor(item.id).length > 0}
+          onClose={() => setSwappingItem(null)}
+          onSwap={(to, everyWeek) => swapItem(item, to, everyWeek)}
+        />
+      )}
       {editingItem?.id === item.id && (
         <EditPanel name={item.exercise.name} onClose={() => setEditingItem(null)}>
           <PrescriptionForm
@@ -799,6 +826,8 @@ function ExerciseCard({
   onSkip,
   onEdit,
   isEditing,
+  onSwap,
+  isSwapping,
   notes,
   onNote,
   ladder,
@@ -824,6 +853,8 @@ function ExerciseCard({
   onSkip: () => void
   onEdit: () => void
   isEditing: boolean
+  onSwap: () => void
+  isSwapping: boolean
   notes: string[]
   onNote: (text: string) => Promise<void>
   ladder?: Ladder
@@ -897,6 +928,14 @@ function ExerciseCard({
         <div className="flex shrink-0 flex-col items-end">
           <button type="button" onClick={onSkip} className="px-2 py-1 text-xs text-neutral-500 underline">
             {item.skipped ? 'Unskip' : 'Skip'}
+          </button>
+          <button
+            type="button"
+            onClick={onSwap}
+            aria-expanded={isSwapping}
+            className={`px-2 py-1 text-xs underline ${isSwapping ? 'font-semibold text-emerald-700 dark:text-emerald-400' : 'text-neutral-500'}`}
+          >
+            {isSwapping ? 'Swapping ↓' : 'Swap'}
           </button>
           <button
             type="button"
@@ -1550,7 +1589,7 @@ function SetEditor({
 }
 
 /** The one-off edit form for an exercise: scrolls into view and stands out, so it's clear it opened. */
-function EditPanel({ name, onClose, children }: { name: string; onClose: () => void; children: ReactNode }) {
+function EditPanel({ name, title, onClose, children }: { name: string; title?: string; onClose: () => void; children: ReactNode }) {
   const ref = useRef<HTMLElement>(null)
   useEffect(() => ref.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), [])
   return (
@@ -1561,8 +1600,8 @@ function EditPanel({ name, onClose, children }: { name: string; onClose: () => v
     >
       <header className="mb-2 flex items-start gap-2">
         <div className="flex-1">
-          <h3 className="font-semibold">Editing {name}</h3>
-          <p className="text-sm text-neutral-600 dark:text-neutral-300">For this day only. To change it every week, use Plan.</p>
+          <h3 className="font-semibold">{title ?? `Editing ${name}`}</h3>
+          {!title && <p className="text-sm text-neutral-600 dark:text-neutral-300">For this day only. To change it every week, use Plan.</p>}
         </div>
         <button type="button" onClick={onClose} aria-label="Close the edit form" className="-m-2 p-2 text-xl leading-none text-neutral-500">
           ×
@@ -1628,5 +1667,69 @@ function NoteBar({ name, notes, onNote }: { name: string; notes: string[]; onNot
         )}
       </form>
     </div>
+  )
+}
+
+/** Pick another exercise for the same muscles: for this day, or for every week from here on. */
+function SwapPanel({
+  item,
+  canChangePlan,
+  hasSets,
+  onClose,
+  onSwap,
+}: {
+  item: DayExercise
+  canChangePlan: boolean
+  hasSets: boolean
+  onClose: () => void
+  onSwap: (to: Exercise, everyWeek: boolean) => Promise<void>
+}) {
+  const [library, setLibrary] = useState<Exercise[] | null>(null)
+  const [everyWeek, setEveryWeek] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [loadError, setLoadError] = useState<string | null>(null)
+  useEffect(() => {
+    listExercises(supabase!).then(setLibrary, (e: unknown) => setLoadError(e instanceof Error ? e.message : String(e)))
+  }, [])
+  const options = library ? swapOptions(item.exercise, library) : []
+  return (
+    <EditPanel name={item.exercise.name} title={`Swap ${item.exercise.name}`} onClose={onClose}>
+      <p className="text-sm text-neutral-600 dark:text-neutral-300">
+        Exercises for the same muscles, closest first. Sets, reps and rest stay as planned.
+      </p>
+      {hasSets && <p className="mt-2 text-sm text-red-600">This one has logged sets. Uncheck them before swapping.</p>}
+      {canChangePlan && (
+        <label className="mt-3 flex items-center gap-2 text-sm">
+          <input type="checkbox" checked={everyWeek} onChange={(e) => setEveryWeek(e.target.checked)} />
+          Every week from here on (changes the plan)
+        </label>
+      )}
+      {loadError ? (
+        <p className="mt-3 text-sm text-red-600">Couldn't load your exercises: {loadError}</p>
+      ) : !library ? (
+        <p className="mt-3 text-sm text-neutral-500">Loading exercises…</p>
+      ) : options.length === 0 ? (
+        <p className="mt-3 text-sm text-neutral-500">No other exercise in your library works the same muscles yet. Ask Claude to add one.</p>
+      ) : (
+        <ul className="mt-3 space-y-2">
+          {options.map(({ exercise, shared }) => (
+            <li key={exercise.id}>
+              <button
+                type="button"
+                disabled={busy || hasSets}
+                onClick={() => {
+                  setBusy(true)
+                  void onSwap(exercise, everyWeek).finally(() => setBusy(false))
+                }}
+                className="w-full rounded-xl bg-white px-3 py-3 text-left active:bg-neutral-100 disabled:opacity-50 dark:bg-neutral-900 dark:active:bg-neutral-800"
+              >
+                <span className="block font-medium">{exercise.name}</span>
+                <span className="block text-xs text-neutral-500">Works {shared.join(', ')}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </EditPanel>
   )
 }
