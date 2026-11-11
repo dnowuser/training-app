@@ -271,6 +271,38 @@ export async function moveSession(db: SupabaseClient, session: Session, toDate: 
   })
 }
 
+/** Sessions on the days around `date` you could trade with: a day's first session, or null for a day without one. */
+export async function swapTargets(db: SupabaseClient, date: string, before = 2, after = 7): Promise<{ date: string; session: Session | null }[]> {
+  const from = addDays(date, -before)
+  const to = addDays(date, after)
+  const sessions = check<Session[]>(
+    await db.from('sessions').select('*').gte('date', from).lte('date', to).order('date').order('slot_id', { nullsFirst: false }),
+  )
+  const out: { date: string; session: Session | null }[] = []
+  for (let d = from; d <= to; d = addDays(d, 1)) {
+    if (d !== date) out.push({ date: d, session: sessions.find((s) => s.date === d) ?? null })
+  }
+  return out
+}
+
+/**
+ * Trade the days of two sessions (or move one onto a day with none). Both become
+ * customized and remember the day they were generated for, so regeneration leaves
+ * them alone; a session that lands back on its own day forgets it was moved.
+ */
+export async function swapSessions(db: SupabaseClient, a: Session, toDate: string, b: Session | null): Promise<void> {
+  const origin = (s: Session) => s.moved_from ?? (s.slot_id ? s.date : null)
+  check(await db.from('sessions').update({ date: toDate, customized: true, moved_from: origin(a) }).eq('id', a.id))
+  if (b) check(await db.from('sessions').update({ date: a.date, customized: true, moved_from: origin(b) }).eq('id', b.id))
+  const home = [a, b].filter((s): s is Session => !!s && origin(s) === (s.id === a.id ? toDate : a.date))
+  for (const s of home) check(await db.from('sessions').update({ moved_from: null }).eq('id', s.id))
+  await logChange(db, {
+    summary: b ? `Swapped ${a.name} (${a.date}) with ${b.name} (${toDate})` : `Moved ${a.name} from ${a.date} to ${toDate}`,
+    affects_from: a.date < toDate ? a.date : toDate,
+    details: { session_id: a.id, other_session_id: b?.id ?? null, from: a.date, to: toDate },
+  })
+}
+
 export async function updateSessionNotes(db: SupabaseClient, id: string, notes: string): Promise<void> {
   check(await db.from('sessions').update({ notes: notes || null }).eq('id', id))
 }

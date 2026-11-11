@@ -182,6 +182,32 @@ await test('a moved session stays moved and its old date is not regenerated', as
   assert.equal(after.n, before.n)
 })
 
+await test('two days can trade sessions, and trade back, without regeneration undoing it', async () => {
+  // The same updates swapSessions (src/lib/api.ts) makes, in the same order.
+  const swap = async (a, b) => {
+    const [x, y] = [await one(`select * from sessions where id = $1`, [a]), await one(`select * from sessions where id = $1`, [b])]
+    const origin = (s) => s.moved_from ?? (s.slot_id ? s.date : null)
+    await db.query(`update sessions set date = $2, customized = true, moved_from = $3 where id = $1`, [x.id, y.date, origin(x)])
+    await db.query(`update sessions set date = $2, customized = true, moved_from = $3 where id = $1`, [y.id, x.date, origin(y)])
+    await db.query(`update sessions set moved_from = null where id in ($1, $2) and moved_from = date`, [x.id, y.id])
+  }
+  const thu = await one(`select id, name from sessions where date = '2026-11-05' and slot_id is not null`)
+  const fri = await one(`select id, name from sessions where date = '2026-11-06' and slot_id is not null`)
+  const before = await one(`select count(*)::int as n from sessions`)
+  await swap(thu.id, fri.id)
+  await db.query(`select regenerate_sessions($1::date, $1::date + 83)`, [CYCLE_START])
+  const day = (d) => db.query(`select id from sessions where date = $1`, [d]).then((r) => r.rows.map((x) => x.id))
+  assert.deepEqual(await day('2026-11-05'), [fri.id], "Friday's session is on Thursday")
+  assert.deepEqual(await day('2026-11-06'), [thu.id], "Thursday's session is on Friday")
+  await swap(thu.id, fri.id)
+  await db.query(`select regenerate_sessions($1::date, $1::date + 83)`, [CYCLE_START])
+  assert.deepEqual(await day('2026-11-05'), [thu.id], 'swapped back')
+  const home = await one(`select moved_from from sessions where id = $1`, [thu.id])
+  assert.equal(home.moved_from, null, 'a session back on its own day forgets it was moved')
+  const after = await one(`select count(*)::int as n from sessions`)
+  assert.equal(after.n, before.n)
+})
+
 await test('an exercise can point at the feat ladder it practises', async () => {
   await db.query(`update exercises set feat_id = (select id from feats where slug = 'handstand-push-up') where slug = 'handstand-push-up'`)
   await db.query(`update feat_steps set how = 'Hands shoulder width, hips high.' where step_number = 1 and feat_id = (select id from feats where slug = 'handstand-push-up')`)

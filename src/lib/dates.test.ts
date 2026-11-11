@@ -12,10 +12,11 @@ describe('dates', () => {
     expect(startOfWeek('2026-10-12')).toBe('2026-10-12')
   })
 
-  it('builds whole Monday-first weeks for a month', () => {
+  it('builds whole Sunday-first weeks for a month', () => {
     const days = monthGrid('2026-10')
-    expect(days[0]).toBe('2026-09-28')
-    expect(days.at(-1)).toBe('2026-11-01')
+    // Oct 1, 2026 is a Thursday, Oct 31 a Saturday.
+    expect(days[0]).toBe('2026-09-27')
+    expect(days.at(-1)).toBe('2026-10-31')
     expect(days.length % 7).toBe(0)
   })
 
