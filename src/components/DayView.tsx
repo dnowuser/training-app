@@ -14,6 +14,8 @@ import {
   updateSessionNotes,
   listExercises,
   swapSessionExercise,
+  swapSessions,
+  swapTargets,
   updateSet,
   updateSetRpe,
   type Day,
@@ -39,7 +41,7 @@ import {
   type SetField,
   type SetValues,
 } from '../lib/logging'
-import { localISODate } from '../lib/dates'
+import { formatDay, localISODate } from '../lib/dates'
 import { exerciseLevels } from '../lib/muscles'
 import { exerciseFills } from '../lib/overview'
 import { markStep } from '../lib/feats'
@@ -63,7 +65,7 @@ import { AnatomyMap } from './AnatomyMap'
 import { MuscleDiagram } from './MuscleDiagram'
 import { sectionsOf } from '../lib/sections'
 import { SessionOptions } from './SessionOptions'
-import type { Block, Exercise, FeatRef, LoggedSet } from '../lib/types'
+import type { Block, Exercise, FeatRef, LoggedSet, Session } from '../lib/types'
 
 const BLOCK_LABELS: Record<Block, string> = {
   warmup: 'Warm-up',
@@ -320,6 +322,7 @@ function SessionView({
   const [editing, setEditing] = useState<string | null>(null)
   const [editingItem, setEditingItem] = useState<DayExercise | null>(null)
   const [swappingItem, setSwappingItem] = useState<DayExercise | null>(null)
+  const [swappingDay, setSwappingDay] = useState(false)
   const [tmNotes, setTmNotes] = useState<string[]>([])
   // The stored prescription stays as planned; the card follows the current ladder step.
   const items = day.exercises
@@ -666,7 +669,27 @@ function SessionView({
         {session.is_deload && <Badge tone="amber">Deload</Badge>}
         {session.slot?.mobility && <Badge>Mobility {session.slot.mobility}</Badge>}
         {finished && <Badge tone="emerald">{session.status === 'done' ? 'Done' : 'Partial'}</Badge>}
+        {session.status === 'planned' && day.sets.every((x) => !items.some((i) => i.id === x.session_exercise_id)) && (
+          <button
+            type="button"
+            onClick={() => setSwappingDay(!swappingDay)}
+            aria-expanded={swappingDay}
+            className={`rounded-full px-2 py-0.5 font-medium ${swappingDay ? 'bg-emerald-600 text-white' : 'bg-neutral-100 text-neutral-700 dark:bg-neutral-800 dark:text-neutral-200'}`}
+          >
+            ⇄ Swap day
+          </button>
+        )}
       </div>
+      {swappingDay && (
+        <SwapDayPanel
+          session={session}
+          onClose={() => setSwappingDay(false)}
+          onSwapped={() => {
+            setSwappingDay(false)
+            reload()
+          }}
+        />
+      )}
       {session.notes && <p className="mt-2 text-sm text-neutral-600 dark:text-neutral-300">{session.notes}</p>}
       {(() => {
         const today = featsFor(items, day.exerciseFeats)
@@ -1791,5 +1814,55 @@ function CardAction({ onClick, active = false, children }: { onClick: () => void
     >
       {children}
     </button>
+  )
+}
+
+/** Trade this day's workout with another day's: tap the day to swap with. */
+function SwapDayPanel({ session, onClose, onSwapped }: { session: Session; onClose: () => void; onSwapped: () => void }) {
+  const [days, setDays] = useState<{ date: string; session: Session | null }[] | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+  useEffect(() => {
+    swapTargets(supabase!, session.date).then(setDays, (e: unknown) => setError(e instanceof Error ? e.message : String(e)))
+  }, [session.date])
+
+  async function swap(date: string, other: Session | null) {
+    setBusy(true)
+    try {
+      await swapSessions(supabase!, session, date, other)
+      onSwapped()
+    } catch (e) {
+      setError(isNetworkError(e) ? 'Swapping days needs signal. Try again once you are back online.' : e instanceof Error ? e.message : String(e))
+      setBusy(false)
+    }
+  }
+
+  return (
+    <EditPanel name={session.name} title="Swap with another day" onClose={onClose}>
+      {error && <p className="mb-2 text-sm text-red-600">{error}</p>}
+      {!days ? (
+        !error && <p className="text-sm text-neutral-500">Loading days…</p>
+      ) : (
+        <ul className="space-y-2">
+          {days.map(({ date, session: other }) => {
+            const started = !!other && other.status !== 'planned'
+            return (
+              <li key={date}>
+                <button
+                  type="button"
+                  disabled={busy || started}
+                  onClick={() => void swap(date, other)}
+                  className="flex w-full items-baseline gap-3 rounded-xl bg-white px-3 py-3 text-left active:bg-neutral-100 disabled:opacity-40 dark:bg-neutral-900 dark:active:bg-neutral-800"
+                >
+                  <span className="w-24 shrink-0 text-sm text-neutral-500">{formatDay(date)}</span>
+                  <span className="min-w-0 flex-1 font-medium">{other ? other.name : 'Rest day'}</span>
+                  {started && <span className="text-xs text-neutral-500">started</span>}
+                </button>
+              </li>
+            )
+          })}
+        </ul>
+      )}
+    </EditPanel>
   )
 }

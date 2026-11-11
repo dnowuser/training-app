@@ -32,15 +32,16 @@ export function startOfWeek(isoDate: string): string {
 }
 
 /**
- * Days shown on a month calendar: whole weeks, Monday first, from the week
- * containing the 1st to the week containing the last day. month is YYYY-MM.
+ * Days shown on a month calendar: whole weeks, Sunday first (as a wall calendar),
+ * from the week containing the 1st to the week containing the last day. month is YYYY-MM.
  */
 export function monthGrid(month: string): string[] {
   const [y, m] = month.split('-').map(Number)
   const first = `${month}-01`
   const last = localISODate(new Date(y, m, 0))
   const days: string[] = []
-  for (let d = startOfWeek(first); d <= last || days.length % 7 !== 0; d = addDays(d, 1)) days.push(d)
+  const sunday = addDays(first, -parseISODate(first).getDay())
+  for (let d = sunday; d <= last || days.length % 7 !== 0; d = addDays(d, 1)) days.push(d)
   return days
 }
 

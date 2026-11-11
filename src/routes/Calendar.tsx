@@ -98,7 +98,7 @@ export function CalendarScreen() {
       )}
 
       <div className="mt-3 grid grid-cols-7 gap-1 text-center text-xs text-neutral-500">
-        {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((d, i) => (
+        {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => (
           <span key={i}>{d}</span>
         ))}
       </div>
