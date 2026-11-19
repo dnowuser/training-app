@@ -170,6 +170,23 @@ export async function recordTrainingMax(
   return true
 }
 
+/**
+ * Set a lift's training max by hand, from `date` on (today's loads change straight
+ * away). A second change the same day replaces the first; both are in the change log.
+ */
+export async function setTrainingMax(db: SupabaseClient, exercise: Exercise, value: number, date: string, before?: number): Promise<void> {
+  const existing = check<{ id: string }[]>(
+    await db.from('metrics').select('id').eq('kind', 'training_max').eq('exercise_id', exercise.id).eq('measured_on', date),
+  )
+  if (existing.length) check(await db.from('metrics').update({ value, note: 'Set by hand' }).eq('id', existing[0].id))
+  else check(await db.from('metrics').insert({ kind: 'training_max', exercise_id: exercise.id, value, unit: 'lb', measured_on: date, note: 'Set by hand' }))
+  await logChange(db, {
+    summary: `${exercise.name} training max ${before ? `${before} → ` : 'set to '}${value} lb`,
+    affects_from: date,
+    details: { exercise: exercise.slug, before: before ?? null, after: value },
+  })
+}
+
 export async function updateSet(
   db: SupabaseClient,
   id: string,

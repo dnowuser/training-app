@@ -127,6 +127,8 @@ export interface SessionExercise {
   prescription: Prescription
   notes: string | null
   skipped: boolean
+  /** Planned set numbers skipped on this day; not logged and not counted. */
+  skipped_sets: number[]
   template_item_id: string | null
 }
 

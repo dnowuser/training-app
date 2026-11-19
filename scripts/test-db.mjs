@@ -208,6 +208,14 @@ await test('two days can trade sessions, and trade back, without regeneration un
   assert.equal(after.n, before.n)
 })
 
+await test('single sets can be skipped, and generated exercises start with none skipped', async () => {
+  const se = await one(`select id, skipped_sets from session_exercises limit 1`)
+  assert.deepEqual(se.skipped_sets, [])
+  await db.query(`update session_exercises set skipped_sets = '{1,2}' where id = $1`, [se.id])
+  const after = await one(`select skipped_sets from session_exercises where id = $1`, [se.id])
+  assert.deepEqual(after.skipped_sets, [1, 2])
+})
+
 await test('an exercise can point at the feat ladder it practises', async () => {
   await db.query(`update exercises set feat_id = (select id from feats where slug = 'handstand-push-up') where slug = 'handstand-push-up'`)
   await db.query(`update feat_steps set how = 'Hands shoulder width, hips high.' where step_number = 1 and feat_id = (select id from feats where slug = 'handstand-push-up')`)
