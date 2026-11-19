@@ -63,6 +63,7 @@ import { dequeue, enqueue, isNetworkError, pendingSet, QUEUE_EVENT, queuedAsLogg
 import { supabase } from '../lib/supabase'
 import { PrescriptionForm } from './PrescriptionForm'
 import { searchSwaps, swapOptions } from '../lib/swap'
+import { createExerciseLike } from '../lib/plan'
 import { AnatomyMap } from './AnatomyMap'
 import { MuscleDiagram } from './MuscleDiagram'
 import { sectionsOf } from '../lib/sections'
@@ -1668,7 +1669,10 @@ function SetEditor({
 /** The one-off edit form for an exercise: scrolls into view and stands out, so it's clear it opened. */
 function EditPanel({ name, title, onClose, children }: { name: string; title?: string; onClose: () => void; children: ReactNode }) {
   const ref = useRef<HTMLElement>(null)
-  useEffect(() => ref.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), [])
+  useEffect(() => {
+    // Braces matter: newer browsers return a promise from scrollIntoView, and an effect must return nothing.
+    void ref.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }, [])
   return (
     <section
       ref={ref}
@@ -1785,6 +1789,7 @@ function SwapPanel({
     listExercises(supabase!).then(setLibrary, (e: unknown) => setLoadError(e instanceof Error ? e.message : String(e)))
   }, [])
   const [query, setQuery] = useState('')
+  const [addError, setAddError] = useState<string | null>(null)
   // Typing searches the whole library; otherwise the closest matches for the same muscles.
   const options = !library
     ? []
@@ -1815,10 +1820,8 @@ function SwapPanel({
         <p className="mt-3 text-sm text-red-600">Couldn't load your exercises: {loadError}</p>
       ) : !library ? (
         <p className="mt-3 text-sm text-neutral-500">Loading exercises…</p>
-      ) : options.length === 0 ? (
-        <p className="mt-3 text-sm text-neutral-500">
-          {query.trim() ? `No exercise called "${query.trim()}" in your library. Ask Claude to add it.` : 'No close match in your library yet. Search above, or ask Claude to add one.'}
-        </p>
+      ) : options.length === 0 && !query.trim() ? (
+        <p className="mt-3 text-sm text-neutral-500">No close match in your library yet. Search above, or type a name to add your own.</p>
       ) : (
         <ul className="mt-3 space-y-2">
           {options.map(({ exercise, shared }) => (
@@ -1839,6 +1842,24 @@ function SwapPanel({
           ))}
         </ul>
       )}
+      {library && query.trim() && !library.some((e) => e.name.toLowerCase() === query.trim().toLowerCase()) && (
+        <button
+          type="button"
+          disabled={busy || hasSets}
+          onClick={() => {
+            setBusy(true)
+            createExerciseLike(supabase!, query, item.exercise)
+              .then((ex) => onSwap(ex, everyWeek))
+              .catch((e: unknown) => setAddError(isNetworkError(e) ? 'Adding an exercise needs signal.' : e instanceof Error ? e.message : String(e)))
+              .finally(() => setBusy(false))
+          }}
+          className="mt-3 w-full rounded-xl border-2 border-dashed border-emerald-600 px-3 py-3 text-left disabled:opacity-50"
+        >
+          <span className="block font-medium text-emerald-700 dark:text-emerald-400">+ Add “{query.trim()}” as a new exercise</span>
+          <span className="block text-xs text-neutral-500">Saved to your library, same muscles as {item.exercise.name}</span>
+        </button>
+      )}
+      {addError && <p className="mt-2 text-sm text-red-600">{addError}</p>}
     </EditPanel>
   )
 }
