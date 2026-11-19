@@ -62,7 +62,7 @@ import { applyTrainingMaxes } from '../lib/finish'
 import { dequeue, enqueue, isNetworkError, pendingSet, QUEUE_EVENT, queuedAsLogged, readQueue } from '../lib/offline'
 import { supabase } from '../lib/supabase'
 import { PrescriptionForm } from './PrescriptionForm'
-import { swapOptions } from '../lib/swap'
+import { searchSwaps, swapOptions } from '../lib/swap'
 import { AnatomyMap } from './AnatomyMap'
 import { MuscleDiagram } from './MuscleDiagram'
 import { sectionsOf } from '../lib/sections'
@@ -1784,12 +1784,26 @@ function SwapPanel({
   useEffect(() => {
     listExercises(supabase!).then(setLibrary, (e: unknown) => setLoadError(e instanceof Error ? e.message : String(e)))
   }, [])
-  const options = library ? swapOptions(item.exercise, library) : []
+  const [query, setQuery] = useState('')
+  // Typing searches the whole library; otherwise the closest matches for the same muscles.
+  const options = !library
+    ? []
+    : query.trim()
+      ? searchSwaps(item.exercise, library, query).map((exercise) => ({
+          exercise,
+          shared: (exercise.muscle_detail ?? []).slice(0, 3),
+        }))
+      : swapOptions(item.exercise, library)
   return (
     <EditPanel name={item.exercise.name} title={`Swap ${item.exercise.name}`} onClose={onClose}>
-      <p className="text-sm text-neutral-600 dark:text-neutral-300">
-        Exercises for the same muscles, closest first. Sets, reps and rest stay as planned.
-      </p>
+      <input
+        type="search"
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        placeholder="Search all exercises"
+        aria-label="Search all exercises"
+        className="h-11 w-full rounded-xl border border-neutral-300 bg-white px-3 dark:border-neutral-700 dark:bg-neutral-900"
+      />
       {hasSets && <p className="mt-2 text-sm text-red-600">This one has logged sets. Uncheck them before swapping.</p>}
       {canChangePlan && (
         <label className="mt-3 flex items-center gap-2 text-sm">
@@ -1802,7 +1816,9 @@ function SwapPanel({
       ) : !library ? (
         <p className="mt-3 text-sm text-neutral-500">Loading exercises…</p>
       ) : options.length === 0 ? (
-        <p className="mt-3 text-sm text-neutral-500">No other exercise in your library works the same muscles yet. Ask Claude to add one.</p>
+        <p className="mt-3 text-sm text-neutral-500">
+          {query.trim() ? `No exercise called "${query.trim()}" in your library. Ask Claude to add it.` : 'No close match in your library yet. Search above, or ask Claude to add one.'}
+        </p>
       ) : (
         <ul className="mt-3 space-y-2">
           {options.map(({ exercise, shared }) => (
@@ -1817,7 +1833,7 @@ function SwapPanel({
                 className="w-full rounded-xl bg-white px-3 py-3 text-left active:bg-neutral-100 disabled:opacity-50 dark:bg-neutral-900 dark:active:bg-neutral-800"
               >
                 <span className="block font-medium">{exercise.name}</span>
-                <span className="block text-xs text-neutral-500">Works {shared.join(', ')}</span>
+                {shared.length > 0 && <span className="block text-xs text-neutral-500">Works {shared.join(', ')}</span>}
               </button>
             </li>
           ))}

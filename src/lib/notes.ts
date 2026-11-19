@@ -13,7 +13,15 @@ export interface Note {
   status: NoteStatus | null
 }
 
-export const isDone = (n: Note) => Boolean(n.status?.done_on)
+/** What's been added to a note since it was marked done ('' when nothing has). */
+export function addedSince(n: Note): string {
+  const handled = n.status?.handled_text
+  if (!n.status?.done_on || handled == null || n.text === handled) return ''
+  return n.text.startsWith(handled) ? n.text.slice(handled.length).trim() : n.text
+}
+
+/** Done once marked done and nothing has been added to it since. */
+export const isDone = (n: Note) => Boolean(n.status?.done_on) && addedSince(n) === ''
 
 export async function loadNotes(db: SupabaseClient): Promise<Note[]> {
   const [sessions, sets, milestones, statuses] = await Promise.all([
@@ -23,7 +31,7 @@ export async function loadNotes(db: SupabaseClient): Promise<Note[]> {
       .select('id, note, item:session_exercises(exercise:exercises(name), session:sessions(date))')
       .not('note', 'is', null),
     db.from('milestones').select('id, achieved_on, title, note').not('note', 'is', null),
-    db.from('note_status').select('id, source, source_id, done_on, response'),
+    db.from('note_status').select('id, source, source_id, done_on, response, handled_text'),
   ])
   const byKey = new Map(check<NoteStatus[]>(statuses).map((s) => [`${s.source}:${s.source_id}`, s]))
   const status = (source: Note['source'], id: string) => byKey.get(`${source}:${id}`) ?? null
@@ -59,9 +67,10 @@ export async function loadNotes(db: SupabaseClient): Promise<Note[]> {
 
 /** Mark a note done (with what was done about it) or open again. The note itself is never changed. */
 export async function setNoteDone(db: SupabaseClient, note: Note, doneOn: string | null, response: string | null): Promise<NoteStatus> {
-  const fields = { done_on: doneOn, response: response?.trim() || null }
+  // Marking done remembers the note as it reads now, so later additions show as open.
+  const fields = { done_on: doneOn, response: response?.trim() || null, handled_text: doneOn ? note.text : null }
   const query = note.status
     ? db.from('note_status').update(fields).eq('id', note.status.id)
     : db.from('note_status').insert({ source: note.source, source_id: note.sourceId, ...fields })
-  return check<NoteStatus>(await query.select('id, source, source_id, done_on, response').single())
+  return check<NoteStatus>(await query.select('id, source, source_id, done_on, response, handled_text').single())
 }

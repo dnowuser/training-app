@@ -244,4 +244,6 @@ export interface NoteStatus {
   source_id: string
   done_on: string | null
   response: string | null
+  /** The note as it read when marked done; anything added since is open again. */
+  handled_text: string | null
 }

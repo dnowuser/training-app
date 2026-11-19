@@ -216,6 +216,17 @@ await test('single sets can be skipped, and generated exercises start with none 
   assert.deepEqual(after.skipped_sets, [1, 2])
 })
 
+await test('a handled note remembers its text, so later additions can show as open', async () => {
+  const s = await one(`select id from sessions order by date desc limit 1`)
+  await db.query(
+    `insert into note_status (source, source_id, done_on, response, handled_text) values ('session', $1, '2026-11-19', 'done', 'Deadlift: skip sets')
+     on conflict (user_id, source, source_id) do update set handled_text = excluded.handled_text`,
+    [s.id],
+  )
+  const row = await one(`select handled_text from note_status where source_id = $1`, [s.id])
+  assert.equal(row.handled_text, 'Deadlift: skip sets')
+})
+
 await test('an exercise can point at the feat ladder it practises', async () => {
   await db.query(`update exercises set feat_id = (select id from feats where slug = 'handstand-push-up') where slug = 'handstand-push-up'`)
   await db.query(`update feat_steps set how = 'Hands shoulder width, hips high.' where step_number = 1 and feat_id = (select id from feats where slug = 'handstand-push-up')`)
