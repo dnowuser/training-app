@@ -78,15 +78,47 @@ export function slugify(name: string): string {
 
 export async function createExercise(
   db: SupabaseClient,
-  e: { name: string; area: Area; measure: Measure; cues?: string },
+  e: { name: string; area: Area; measure: Measure; cues?: string; muscles?: string[]; muscle_detail?: string[] },
 ): Promise<Exercise> {
+  const base = slugify(e.name)
+  const taken = check<{ slug: string }[]>(await db.from('exercises').select('slug').like('slug', `${base}%`)).map((r) => r.slug)
+  let slug = base
+  for (let n = 2; taken.includes(slug); n++) slug = `${base}-${n}`
   return check<Exercise>(
     await db
       .from('exercises')
-      .insert({ slug: slugify(e.name), name: e.name, area: e.area, measure: e.measure, cues: e.cues || null })
+      .insert({
+        slug,
+        name: e.name,
+        area: e.area,
+        measure: e.measure,
+        cues: e.cues || null,
+        ...(e.muscles ? { muscles: e.muscles } : {}),
+        ...(e.muscle_detail ? { muscle_detail: e.muscle_detail } : {}),
+      })
       .select()
       .single(),
   )
+}
+
+/**
+ * Save an exercise typed in the Swap search as a new library exercise, set up like
+ * the one it replaces: same muscles, logging and feats, so the card, muscle map and
+ * future swaps work straight away.
+ */
+export async function createExerciseLike(db: SupabaseClient, name: string, like: Exercise): Promise<Exercise> {
+  const ex = await createExercise(db, {
+    name: name.trim().replace(/^./, (c) => c.toUpperCase()),
+    area: like.area,
+    measure: like.measure,
+    muscles: like.muscles ?? [],
+    muscle_detail: like.muscle_detail ?? [],
+    cues: `Your own exercise, added as a swap for ${like.name}. It works the same muscles and logs the same way. Ask Claude to write how to do it.`,
+  })
+  const links = check<{ feat_id: string }[]>(await db.from('exercise_feats').select('feat_id').eq('exercise_id', like.id))
+  if (links.length) check(await db.from('exercise_feats').insert(links.map((l) => ({ exercise_id: ex.id, feat_id: l.feat_id }))))
+  await logChange(db, { summary: `Added ${ex.name} to the exercise library`, details: { exercise: ex.slug, like: like.slug } })
+  return ex
 }
 
 export async function updateExerciseCues(db: SupabaseClient, id: string, cues: string): Promise<void> {
