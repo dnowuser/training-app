@@ -1928,15 +1928,53 @@ function SkippedRow({ number, target, onUndo }: { number: string; target: string
 }
 
 /**
- * Swipe a set left to skip it. Vertical scrolling still works; a short drag snaps back.
- * Starting on a text box doesn't start a swipe, so typing a weight never skips a set.
+ * Swipe a set left to skip it. Works from anywhere on the row, the weight and reps
+ * boxes included (a set row is mostly boxes); only a box you're typing in doesn't
+ * start a swipe. Vertical scrolling still works and a short drag snaps back.
+ * Touch events drive it on the phone; a mouse drag does the same on a computer.
  */
 function SwipeToSkip({ enabled, onSkip, children }: { enabled: boolean; onSkip: () => void; children: ReactNode }) {
   const [dx, setDx] = useState(0)
   const [dragging, setDragging] = useState(false)
   const start = useRef<{ x: number; y: number; swiping: boolean } | null>(null)
+  // Set when a swipe ends, so the tap it ends with doesn't also press a button or open a box.
+  const swiped = useRef(false)
   if (!enabled) return <>{children}</>
   const THRESHOLD = 90
+
+  const begin = (x: number, y: number, target: EventTarget) => {
+    const el = target as HTMLElement
+    if (el.closest('input, select, textarea') && el === document.activeElement) return
+    swiped.current = false
+    start.current = { x, y, swiping: false }
+  }
+  const move = (x: number, y: number) => {
+    const s = start.current
+    if (!s) return
+    const ddx = x - s.x
+    const ddy = y - s.y
+    if (!s.swiping && Math.abs(ddy) > 12 && Math.abs(ddy) > Math.abs(ddx)) {
+      start.current = null // scrolling, not swiping
+      return
+    }
+    if (!s.swiping && ddx < -12 && Math.abs(ddx) > Math.abs(ddy)) {
+      s.swiping = true
+      setDragging(true)
+    }
+    if (s.swiping) setDx(Math.min(0, ddx))
+  }
+  const end = () => {
+    const s = start.current
+    start.current = null
+    setDragging(false)
+    if (!s?.swiping) return setDx(0)
+    swiped.current = true
+    const skip = dx <= -THRESHOLD
+    setDx(0)
+    ;(document.activeElement as HTMLElement | null)?.blur?.()
+    if (skip) onSkip()
+  }
+
   return (
     <div className="relative overflow-hidden rounded-xl">
       {dx < 0 && (
@@ -1950,40 +1988,23 @@ function SwipeToSkip({ enabled, onSkip, children }: { enabled: boolean; onSkip: 
       <div
         style={{ transform: `translateX(${dx}px)`, transition: dragging ? 'none' : 'transform 150ms', touchAction: 'pan-y' }}
         className="relative"
-        onPointerDown={(e) => {
-          if ((e.target as HTMLElement).closest('input, select, textarea')) return
-          start.current = { x: e.clientX, y: e.clientY, swiping: false }
-        }}
-        onPointerMove={(e) => {
-          const s = start.current
-          if (!s) return
-          const x = e.clientX - s.x
-          if (!s.swiping && Math.abs(e.clientY - s.y) > 12 && Math.abs(e.clientY - s.y) > Math.abs(x)) {
-            start.current = null
-            setDx(0)
-            return
-          }
-          if (x < -10 && !s.swiping) {
-            s.swiping = true
-            setDragging(true)
-          }
-          if (s.swiping) setDx(Math.min(0, x))
-        }}
-        onPointerUp={() => {
-          const skip = dx <= -THRESHOLD
-          start.current = null
-          setDragging(false)
-          setDx(0)
-          if (skip) onSkip()
-        }}
-        onPointerCancel={() => {
+        onTouchStart={(e) => begin(e.touches[0].clientX, e.touches[0].clientY, e.target)}
+        onTouchMove={(e) => move(e.touches[0].clientX, e.touches[0].clientY)}
+        onTouchEnd={end}
+        onTouchCancel={() => {
           start.current = null
           setDragging(false)
           setDx(0)
         }}
+        onPointerDown={(e) => e.pointerType === 'mouse' && begin(e.clientX, e.clientY, e.target)}
+        onPointerMove={(e) => e.pointerType === 'mouse' && move(e.clientX, e.clientY)}
+        onPointerUp={(e) => e.pointerType === 'mouse' && end()}
         onClickCapture={(e) => {
-          // A swipe that ends on a button shouldn't also press it.
-          if (dx !== 0) e.stopPropagation()
+          if (swiped.current) {
+            swiped.current = false
+            e.stopPropagation()
+            e.preventDefault()
+          }
         }}
       >
         {children}
