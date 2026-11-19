@@ -23,8 +23,8 @@ const PATTERN_BONUS = 2
 
 /**
  * Exercises that work the same muscles as `current`, best match first. The same
- * movement pattern (a row for a row) comes first; otherwise a candidate has to share
- * one of `current`'s two main movers among its own first three. Stretches only swap
+ * movement pattern (a row for a row) comes first; any other candidate has to be led
+ * by one of `current`'s two main movers (its own first muscle). Stretches only swap
  * for stretches. Ranked by shared muscles, weighted by how high each sits in both lists.
  */
 export function swapOptions(current: Exercise, library: Exercise[], limit = 8): SwapOption[] {
@@ -39,10 +39,21 @@ export function swapOptions(current: Exercise, library: Exercise[], limit = 8): 
     const theirs = ex.muscle_detail ?? []
     const shared = mine.filter((m) => theirs.includes(m))
     const samePattern = pattern !== null && patternOf(ex.name) === pattern && shared.length > 0
-    if (!samePattern && !main.some((m) => theirs.slice(0, 3).includes(m))) continue
+    // A different movement has to be led by the same muscle (a curl never suggests a muscle-up).
+    if (!samePattern && !main.includes(theirs[0])) continue
     const score =
       shared.reduce((sum, m) => sum + weight(mine.indexOf(m)) * weight(theirs.indexOf(m)), 0) + (samePattern ? PATTERN_BONUS : 0)
     options.push({ exercise: ex, shared, score })
   }
   return options.sort((a, b) => b.score - a.score || a.exercise.name.localeCompare(b.exercise.name)).slice(0, limit)
+}
+
+/** Every other exercise in the library whose name matches `query`, for picking a swap by hand. */
+export function searchSwaps(current: Exercise, library: Exercise[], query: string, limit = 12): Exercise[] {
+  const q = query.trim().toLowerCase()
+  if (!q) return []
+  return library
+    .filter((ex) => ex.id !== current.id && ex.name.toLowerCase().includes(q))
+    .sort((a, b) => Number(!a.name.toLowerCase().startsWith(q)) - Number(!b.name.toLowerCase().startsWith(q)) || a.name.localeCompare(b.name))
+    .slice(0, limit)
 }

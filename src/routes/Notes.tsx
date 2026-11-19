@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { formatDay, localISODate } from '../lib/dates'
-import { isDone, loadNotes, setNoteDone, type Note } from '../lib/notes'
+import { addedSince, isDone, loadNotes, setNoteDone, type Note } from '../lib/notes'
 import { supabase } from '../lib/supabase'
 
 /** Every note you've written, open ones first; mark one done with what was done about it. */
@@ -66,12 +66,24 @@ function NoteCard({ note, onMark }: { note: Note; onMark: (done: boolean, respon
   const [writing, setWriting] = useState(false)
   const [response, setResponse] = useState(note.status?.response ?? '')
   const done = isDone(note)
+  const added = addedSince(note)
   return (
     <li className="rounded-2xl border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900">
       <p className="text-xs text-neutral-500">
         {formatDay(note.date)} · {note.where}
       </p>
-      <p className="mt-1 whitespace-pre-line">{note.text}</p>
+      {added ? (
+        <>
+          <p className="mt-1 text-xs font-semibold tracking-wide text-amber-700 uppercase dark:text-amber-400">New since done</p>
+          <p className="whitespace-pre-line">{added}</p>
+          <details className="mt-2 text-sm text-neutral-500">
+            <summary>Earlier, done {formatDay(note.status!.done_on!)}</summary>
+            <p className="mt-1 whitespace-pre-line">{note.status!.handled_text}</p>
+          </details>
+        </>
+      ) : (
+        <p className="mt-1 whitespace-pre-line">{note.text}</p>
+      )}
       {done && (
         <p className="mt-2 text-sm text-emerald-700 dark:text-emerald-400">
           ✓ Done {formatDay(note.status!.done_on!)}
