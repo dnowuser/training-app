@@ -330,12 +330,16 @@ function SessionView({
   const [editingItem, setEditingItem] = useState<DayExercise | null>(null)
   const [swappingItem, setSwappingItem] = useState<DayExercise | null>(null)
   const [swappingDay, setSwappingDay] = useState(false)
+  // The day's notes and feats fold into two chips; tap one to read it.
+  const [showDayInfo, setShowDayInfo] = useState<'notes' | 'feats' | null>(null)
   const [tmNotes, setTmNotes] = useState<string[]>([])
   // The stored prescription stays as planned; the card follows the current ladder step.
   const items = day.exercises
     .filter((e) => e.session_id === session.id)
     .map((e) => ({ ...e, prescription: prescriptionFor(e, day.ladders) }))
   const stored = new Map(day.exercises.map((e) => [e.id, e]))
+  const dayNotes = (session.notes ?? '').split(/\n\s*\n/).map((n) => n.trim()).filter(Boolean)
+  const dayFeats = featsFor(items, day.exerciseFeats)
   const setsFor = (id: string) => day.sets.filter((s) => s.session_exercise_id === id)
 
   const report = (e: unknown) => onError(e instanceof Error ? e.message : String(e))
@@ -701,7 +705,6 @@ function SessionView({
       <div className="mt-2 flex flex-wrap gap-1.5 text-xs">
         {session.week && <Badge>Week {session.week}</Badge>}
         {session.is_deload && <Badge tone="amber">Deload</Badge>}
-        {session.slot?.mobility && <Badge>Mobility {session.slot.mobility}</Badge>}
         {finished && <Badge tone="emerald">{session.status === 'done' ? 'Done' : 'Partial'}</Badge>}
         {session.status === 'planned' && day.sets.every((x) => !items.some((i) => i.id === x.session_exercise_id)) && (
           <button
@@ -711,6 +714,26 @@ function SessionView({
             className={`rounded-full px-2 py-0.5 font-medium ${swappingDay ? 'bg-emerald-600 text-white' : 'bg-neutral-100 text-neutral-700 dark:bg-neutral-800 dark:text-neutral-200'}`}
           >
             ⇄ Swap day
+          </button>
+        )}
+        {dayNotes.length > 0 && (
+          <button
+            type="button"
+            onClick={() => setShowDayInfo(showDayInfo === 'notes' ? null : 'notes')}
+            aria-expanded={showDayInfo === 'notes'}
+            className={`rounded-full px-2 py-0.5 font-medium ${showDayInfo === 'notes' ? 'bg-emerald-600 text-white' : 'bg-neutral-100 text-neutral-700 dark:bg-neutral-800 dark:text-neutral-200'}`}
+          >
+            💬 {dayNotes.length} {dayNotes.length === 1 ? 'note' : 'notes'}
+          </button>
+        )}
+        {dayFeats.length > 0 && (
+          <button
+            type="button"
+            onClick={() => setShowDayInfo(showDayInfo === 'feats' ? null : 'feats')}
+            aria-expanded={showDayInfo === 'feats'}
+            className={`rounded-full px-2 py-0.5 font-medium ${showDayInfo === 'feats' ? 'bg-emerald-600 text-white' : 'bg-neutral-100 text-neutral-700 dark:bg-neutral-800 dark:text-neutral-200'}`}
+          >
+            ★ {dayFeats.length} {dayFeats.length === 1 ? 'feat' : 'feats'}
           </button>
         )}
       </div>
@@ -724,16 +747,21 @@ function SessionView({
           }}
         />
       )}
-      {session.notes && <p className="mt-2 text-sm text-neutral-600 dark:text-neutral-300">{session.notes}</p>}
-      {(() => {
-        const today = featsFor(items, day.exerciseFeats)
-        return today.length > 0 ? (
-          <p className="mt-2 text-sm">
-            <span className="text-neutral-500">Builds today: </span>
-            {today.map((f) => f.name).join(', ')}
-          </p>
-        ) : null
-      })()}
+      {showDayInfo === 'notes' && (
+        <ul className="mt-2 space-y-1 text-sm">
+          {dayNotes.map((n, i) => (
+            <li key={i} className="rounded-lg bg-neutral-100 px-3 py-1.5 dark:bg-neutral-800/60">
+              {n}
+            </li>
+          ))}
+        </ul>
+      )}
+      {showDayInfo === 'feats' && (
+        <p className="mt-2 text-sm">
+          <span className="text-neutral-500">Builds: </span>
+          {dayFeats.map((f) => f.name).join(', ')}
+        </p>
+      )}
 
       {plannedCount > 0 && (
         <div className="mt-4">
@@ -2016,7 +2044,7 @@ function SwipeToSkip({ enabled, onSkip, children }: { enabled: boolean; onSkip: 
   }
 
   return (
-    <div className="relative overflow-hidden rounded-xl">
+    <div className="relative overflow-hidden rounded-xl" data-no-day-swipe>
       {dx < 0 && (
         <div
           aria-hidden
