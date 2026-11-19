@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react'
+import { caretToEnd } from '../lib/caret'
 import { Link } from 'react-router'
 import { FeatOutlook } from '../components/FeatOutlook'
 import { LineChart } from '../components/LineChart'
@@ -358,7 +359,7 @@ function RecordMetric({ exercises, onSaved }: { exercises: ProgressData['exercis
           ))}
         </select>
       )}
-      <input className={field} inputMode={spec.unit === 's' ? 'text' : 'decimal'} placeholder={spec.label} value={value} onChange={(e) => setValue(e.target.value)} />
+      <input className={field} {...caretToEnd} inputMode={spec.unit === 's' ? 'text' : 'decimal'} placeholder={spec.label} value={value} onChange={(e) => setValue(e.target.value)} />
       <input className={field} type="date" value={date} onChange={(e) => setDate(e.target.value)} />
       {error && <p className="text-sm text-red-600">{error}</p>}
       <div className="flex gap-2">

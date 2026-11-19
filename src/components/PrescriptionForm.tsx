@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { caretToEnd } from '../lib/caret'
 import { describePrescription } from '../lib/prescription'
 import { fromFormValues, NUMBER_FIELDS, toFormValues, type PrescriptionFormValues } from '../lib/prescriptionForm'
 import type { Prescription } from '../lib/types'
@@ -63,6 +64,7 @@ export function PrescriptionForm({
           <label key={key} className="block text-sm">
             <span className="text-neutral-500">{label}</span>
             <input
+              {...caretToEnd}
               inputMode="decimal"
               className={input}
               value={form.numbers[key]}

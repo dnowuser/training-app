@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
+import { caretToEnd } from '../lib/caret'
 import { Link } from 'react-router'
 import {
   addSession,
@@ -1439,6 +1440,7 @@ function QuickRow({
         {fields.map((f) => (
           <label key={f} className="flex min-w-0 flex-1 flex-col items-center">
             <input
+              {...caretToEnd}
               inputMode={usesClock(measure, f) ? 'text' : 'decimal'}
               value={text[f]}
               placeholder={usesClock(measure, f) ? 'm:ss' : ''}
@@ -1583,6 +1585,7 @@ function SetEditor({
             −
           </button>
           <input
+            {...caretToEnd}
             inputMode={usesClock(measure, f) ? 'text' : 'decimal'}
             value={text[f]}
             placeholder={usesClock(measure, f) ? 'm:ss' : ''}
@@ -2084,6 +2087,7 @@ function TmChip({ name, tm, onSave }: { name: string; tm: number | undefined; on
       <input
         value={value}
         onChange={(e) => setValue(e.target.value.replace(/[^0-9.]/g, ''))}
+        {...caretToEnd}
         inputMode="numeric"
         autoFocus
         aria-label={`New training max for ${name}, lb`}
