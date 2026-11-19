@@ -9,6 +9,8 @@ import {
   loadDay,
   removeSessionExercise,
   setSkipped,
+  setTrainingMax,
+  check,
   updateSession,
   updateSessionExercise,
   updateSessionNotes,
@@ -82,6 +84,8 @@ interface Row {
   setNumber: number
   planned?: PlannedSet
   logged?: LoggedSet
+  /** A planned set swiped away for this day: not logged, not counted. */
+  skipped?: boolean
 }
 
 /** The day's prescription for an exercise, following its ladder step when the step sets sets and reps. */
@@ -98,6 +102,7 @@ function rowsFor(item: DayExercise, sets: LoggedSet[], tm: number | undefined): 
     if (row) row.logged = s
     else rows.push({ setNumber: s.set_number, logged: s })
   }
+  for (const r of rows) if (r.planned && !r.logged && item.skipped_sets?.includes(r.setNumber)) r.skipped = true
   return rows.sort((a, b) => a.setNumber - b.setNumber)
 }
 
@@ -345,11 +350,12 @@ function SessionView({
           .filter((r) => !r.planned?.isWarmup)
           .map((r) => ({ item, r })),
   )
-  const next = allRows.find(({ r }) => r.planned && !r.logged)
+  const open = (r: Row) => r.planned && !r.logged && !r.skipped
+  const next = allRows.find(({ r }) => open(r))
   const nextKey = next && rowKey(next.item.id, next.r.setNumber)
   // The exercise whose set is open for editing: the first one with sets left that isn't a timed block.
-  const focusId = allRows.find(({ item, r }) => r.planned && !r.logged && !isTimedBlock(item.prescription))?.item.id
-  const plannedCount = allRows.filter(({ r }) => r.planned).length
+  const focusId = allRows.find(({ item, r }) => open(r) && !isTimedBlock(item.prescription))?.item.id
+  const plannedCount = allRows.filter(({ r }) => r.planned && !r.skipped).length
   const doneCount = allRows.filter(({ r }) => r.planned && r.logged).length
 
   /** Try a change online; without signal, show it now and send it later. */
@@ -486,6 +492,30 @@ function SessionView({
         setEditing(null)
       },
     )
+  }
+
+  /** Skip one planned set for this day (or bring it back). */
+  async function skipSet(item: DayExercise, setNumber: number, skip: boolean) {
+    const current = stored.get(item.id)?.skipped_sets ?? []
+    const skipped_sets = skip ? [...new Set([...current, setNumber])].sort((a, b) => a - b) : current.filter((n) => n !== setNumber)
+    const show = () => setDay((d) => d && { ...d, exercises: d.exercises.map((e) => (e.id === item.id ? { ...e, skipped_sets } : e)) })
+    show()
+    await act(
+      async () => {
+        check(await db.from('session_exercises').update({ skipped_sets }).eq('id', item.id))
+      },
+      () => addToOutbox({ kind: 'update', table: 'session_exercises', id: item.id, patch: { skipped_sets } }),
+    )
+  }
+
+  /** Change a lift's training max by hand, from today. */
+  async function changeTm(item: DayExercise, value: number, before: number | undefined) {
+    try {
+      await setTrainingMax(db, item.exercise, value, session.date, before)
+      reload()
+    } catch (e) {
+      onError(isNetworkError(e) ? 'Changing the training max needs signal.' : e instanceof Error ? e.message : String(e))
+    }
   }
 
   async function toggleSkip(item: DayExercise) {
@@ -626,6 +656,8 @@ function SessionView({
         onDelete={(set) => void remove(set)}
         onUncheck={(set) => void remove(set, false)}
         onSkip={() => void toggleSkip(item)}
+        onSkipSet={(n, skip) => void skipSet(item, n, skip)}
+        onChangeTm={(v) => changeTm(item, v, day.trainingMaxes.get(item.exercise_id))}
         onEdit={() => setEditingItem(editingItem?.id === item.id ? null : item)}
         isEditing={editingItem?.id === item.id}
         onSwap={() => setSwappingItem(swappingItem?.id === item.id ? null : item)}
@@ -847,6 +879,8 @@ function ExerciseCard({
   onDelete,
   onUncheck,
   onSkip,
+  onSkipSet,
+  onChangeTm,
   onEdit,
   isEditing,
   onSwap,
@@ -874,6 +908,8 @@ function ExerciseCard({
   onDelete: (set: LoggedSet) => void
   onUncheck: (set: LoggedSet) => void
   onSkip: () => void
+  onSkipSet: (setNumber: number, skip: boolean) => void
+  onChangeTm: (value: number) => Promise<void>
   onEdit: () => void
   isEditing: boolean
   onSwap: () => void
@@ -902,7 +938,7 @@ function ExerciseCard({
   const allLogged = rows.every((r) => r.logged)
   // Done once every work set is in (warm-ups are optional); the card folds itself then.
   const workRows = rows.filter((r) => !r.planned?.isWarmup)
-  const done = workRows.length > 0 && workRows.every((r) => r.logged)
+  const done = workRows.length > 0 && workRows.every((r) => r.logged || r.skipped) && workRows.some((r) => r.logged)
   const [wasDone, setWasDone] = useState(done)
   if (done !== wasDone) {
     setWasDone(done)
@@ -912,7 +948,7 @@ function ExerciseCard({
   const extraKey = rowKey(item.id, Math.max(0, ...rows.map((r) => r.setNumber)) + 1)
   // The first set of the exercise you're on opens on the card. Once a set is checked,
   // the rest stay one-line rows (tap one to open it).
-  const firstOpen = rows.find((r) => r.planned && !r.logged && !r.planned.isWarmup)
+  const firstOpen = rows.find((r) => r.planned && !r.logged && !r.skipped && !r.planned.isWarmup)
   const started = rows.some((r) => r.logged)
   // Tapping the open set's header folds it to a one-line row like the others.
   const [folded, setFolded] = useState<string | null>(null)
@@ -946,6 +982,7 @@ function ExerciseCard({
             </button>
           </h3>
           <p className="text-sm text-neutral-600 dark:text-neutral-300">{describePrescription(p, tm)}</p>
+          {usesTm && <TmChip name={item.exercise.name} tm={tm} onSave={onChangeTm} />}
         </div>
         <div className="-mt-1 -mr-2 flex shrink-0">
           <CardIcon label={`How to do ${item.exercise.name}`} pressed={showInfo} onClick={() => setShowInfo(!showInfo)} d={ICON_INFO} />
@@ -974,9 +1011,6 @@ function ExerciseCard({
       {item.notes && <p className="mt-1 text-sm">{item.notes}</p>}
       {showInfo && (
         <div className="mt-2 space-y-2">
-          {usesTm && (
-            <p className="text-xs text-neutral-500">{tm ? `Training max ${tm} lb` : 'No training max recorded: loads are blank'}</p>
-          )}
       {(item.exercise.muscles?.length > 0 || feats.length > 0) && (
         <p className="text-xs leading-relaxed">
           {item.exercise.muscles?.length > 0 && (
@@ -1051,6 +1085,14 @@ function ExerciseCard({
               : {}
             return (
               <li key={key}>
+                {row.skipped ? (
+                  <SkippedRow
+                    number={row.planned?.isWarmup ? `W${row.setNumber}` : String(row.setNumber - warmups)}
+                    target={row.planned ? describeTarget(row.planned) : ''}
+                    onUndo={() => onSkipSet(row.setNumber, false)}
+                  />
+                ) : (
+                <SwipeToSkip enabled={!!row.planned && !row.logged && editing !== key} onSkip={() => onSkipSet(row.setNumber, true)}>
                 {/* The set you're on is open on the card: change weight, reps or RPE and log it in one tap. */}
                 {editing !== key && key === activeKey && folded !== key ? (
                   <SetEditor
@@ -1110,6 +1152,8 @@ function ExerciseCard({
                       needsInput(measure, defaults) && !timed ? setEditing(key) : onLog(row, defaults)
                     }
                   />
+                )}
+                </SwipeToSkip>
                 )}
               </li>
             )
@@ -1784,7 +1828,7 @@ function SwapPanel({
 }
 
 const ICON_INFO = 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 11v5M12 8h.01'
-const ICON_NOTE = 'M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4'
+const ICON_NOTE = 'M5 5h14v10H10l-4 4v-4H5zM8.5 9h7M8.5 12h4'
 const ICON_MORE = 'M5 12h.01M12 12h.01M19 12h.01'
 
 /** A small icon button on an exercise card; big enough to hit with a thumb. */
@@ -1864,5 +1908,136 @@ function SwapDayPanel({ session, onClose, onSwapped }: { session: Session; onClo
         </ul>
       )}
     </EditPanel>
+  )
+}
+
+/** A skipped set: one quiet line; tap to bring it back. */
+function SkippedRow({ number, target, onUndo }: { number: string; target: string; onUndo: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onUndo}
+      aria-label={`Set ${number} skipped. Tap to bring it back`}
+      className="flex w-full items-center gap-3 rounded-xl border border-dashed border-neutral-300 px-3 py-2 text-left text-sm text-neutral-400 dark:border-neutral-700"
+    >
+      <span className="w-6 tabular-nums">{number}</span>
+      <span className="flex-1 line-through">{target}</span>
+      <span aria-hidden>↺</span>
+    </button>
+  )
+}
+
+/**
+ * Swipe a set left to skip it. Vertical scrolling still works; a short drag snaps back.
+ * Starting on a text box doesn't start a swipe, so typing a weight never skips a set.
+ */
+function SwipeToSkip({ enabled, onSkip, children }: { enabled: boolean; onSkip: () => void; children: ReactNode }) {
+  const [dx, setDx] = useState(0)
+  const [dragging, setDragging] = useState(false)
+  const start = useRef<{ x: number; y: number; swiping: boolean } | null>(null)
+  if (!enabled) return <>{children}</>
+  const THRESHOLD = 90
+  return (
+    <div className="relative overflow-hidden rounded-xl">
+      {dx < 0 && (
+        <div
+          aria-hidden
+          className={`absolute inset-0 flex items-center justify-end rounded-xl pr-4 text-sm font-semibold ${dx <= -THRESHOLD ? 'bg-amber-500 text-white' : 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300'}`}
+        >
+          Skip set
+        </div>
+      )}
+      <div
+        style={{ transform: `translateX(${dx}px)`, transition: dragging ? 'none' : 'transform 150ms', touchAction: 'pan-y' }}
+        className="relative"
+        onPointerDown={(e) => {
+          if ((e.target as HTMLElement).closest('input, select, textarea')) return
+          start.current = { x: e.clientX, y: e.clientY, swiping: false }
+        }}
+        onPointerMove={(e) => {
+          const s = start.current
+          if (!s) return
+          const x = e.clientX - s.x
+          if (!s.swiping && Math.abs(e.clientY - s.y) > 12 && Math.abs(e.clientY - s.y) > Math.abs(x)) {
+            start.current = null
+            setDx(0)
+            return
+          }
+          if (x < -10 && !s.swiping) {
+            s.swiping = true
+            setDragging(true)
+          }
+          if (s.swiping) setDx(Math.min(0, x))
+        }}
+        onPointerUp={() => {
+          const skip = dx <= -THRESHOLD
+          start.current = null
+          setDragging(false)
+          setDx(0)
+          if (skip) onSkip()
+        }}
+        onPointerCancel={() => {
+          start.current = null
+          setDragging(false)
+          setDx(0)
+        }}
+        onClickCapture={(e) => {
+          // A swipe that ends on a button shouldn't also press it.
+          if (dx !== 0) e.stopPropagation()
+        }}
+      >
+        {children}
+      </div>
+    </div>
+  )
+}
+
+/** The lift's training max as a chip; tap to change it from today. */
+function TmChip({ name, tm, onSave }: { name: string; tm: number | undefined; onSave: (value: number) => Promise<void> }) {
+  const [value, setValue] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
+  if (value === null)
+    return (
+      <button
+        type="button"
+        onClick={() => setValue(tm ? String(tm) : '')}
+        aria-label={`Training max for ${name}: ${tm ? `${tm} lb` : 'not set'}. Tap to change`}
+        className="mt-1 rounded-full bg-neutral-100 px-2.5 py-1 text-xs font-medium tabular-nums dark:bg-neutral-800"
+      >
+        TM {tm ? `${tm} lb` : 'not set'}
+      </button>
+    )
+  const n = Number(value)
+  const valid = value !== '' && n > 0 && n !== tm
+  return (
+    <form
+      className="mt-1 flex items-center gap-2"
+      onSubmit={(e) => {
+        e.preventDefault()
+        if (!valid || saving) return
+        setSaving(true)
+        void onSave(Math.round(n)).finally(() => {
+          setSaving(false)
+          setValue(null)
+        })
+      }}
+    >
+      <span className="text-xs text-neutral-500">TM</span>
+      <input
+        value={value}
+        onChange={(e) => setValue(e.target.value.replace(/[^0-9.]/g, ''))}
+        inputMode="numeric"
+        autoFocus
+        aria-label={`New training max for ${name}, lb`}
+        className="h-9 w-20 rounded-lg border border-neutral-300 bg-transparent px-2 text-center tabular-nums dark:border-neutral-700"
+      />
+      <span className="text-xs text-neutral-500">lb</span>
+      <button type="submit" disabled={!valid || saving} className="h-9 rounded-lg bg-emerald-600 px-3 text-sm font-semibold text-white disabled:opacity-40">
+        Save
+      </button>
+      <button type="button" onClick={() => setValue(null)} className="h-9 px-2 text-sm text-neutral-500">
+        Cancel
+      </button>
+    </form>
   )
 }

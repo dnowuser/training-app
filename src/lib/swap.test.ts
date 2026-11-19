@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { swapOptions } from './swap'
 import type { Exercise } from './types'
 
-const ex = (id: string, muscle_detail: string[], area: Exercise['area'] = 'accessory') =>
-  ({ id, slug: id, name: id, area, muscle_detail }) as Exercise
+const ex = (id: string, muscle_detail: string[], area: Exercise['area'] = 'accessory', name = id) =>
+  ({ id, slug: id, name, area, muscle_detail }) as Exercise
 
 describe('swapOptions', () => {
   const facePull = ex('face-pull', ['rear delts', 'mid traps', 'infraspinatus'])
@@ -28,6 +28,18 @@ describe('swapOptions', () => {
     const [best] = swapOptions(facePull, library)
     expect(best.shared).toEqual(['rear delts', 'mid traps'])
     expect(swapOptions(facePull, library).some((o) => o.exercise.area === 'mobility')).toBe(false)
+  })
+
+  it('puts the same movement first: rows for a row', () => {
+    const row = ex('chest-supported-row', ['lats', 'mid traps', 'rhomboids', 'rear delts', 'biceps'], 'accessory', 'Chest-supported row')
+    const lib = [
+      row,
+      ex('weighted-pull-up', ['lats', 'teres major', 'biceps'], 'calisthenics', 'Weighted pull-up'),
+      ex('cable-row', ['mid traps', 'lats', 'rhomboids'], 'accessory', 'Seated cable row'),
+      ex('t-bar', ['lats', 'mid traps', 'erector spinae'], 'lifting', 'T-bar row'),
+      ex('rear-fly', ['rear delts', 'mid traps', 'rhomboids'], 'accessory', 'Cable rear delt fly'),
+    ]
+    expect(swapOptions(row, lib).slice(0, 2).map((o) => o.exercise.id).sort()).toEqual(['cable-row', 't-bar'])
   })
 
   it('has nothing to offer without muscle data', () => {
